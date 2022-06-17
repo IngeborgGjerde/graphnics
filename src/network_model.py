@@ -44,7 +44,7 @@ def hydraulic_network_model(G, inlets=[], outlets=[]):
     L = Constant(0)*vphi[-1]*dx + Constant(0)*vphi[-2]*dx
 
     # Add in branch contributions
-    for i in range(0, len(G.edges)):
+    for i in range(0, len(edges)):
         a += qp[i]*vphi[i]*dx_[i]
         a -= qp[-1]*dds(vphi[i])*dx_[i]
         a += vphi[-1]*dds(qp[i])*dx_[i]
@@ -79,6 +79,7 @@ if __name__ == '__main__':
     #G = make_double_Y_bifurcation()
     
     G = honeycomb(1,1)
+    G.make_mesh(4)
     qp0 = hydraulic_network_model(G, inlets=[BOUN_IN])
 
     vars = qp0.split()
@@ -91,7 +92,7 @@ if __name__ == '__main__':
     p = vars[-1]
     lam = vars[-2]
     
-    q.rename('q', '0.0')
+    qi.rename('q', '0.0')
     p.rename('p', '0.0')
     File('plots/p.pvd')<<p
     File('plots/q.pvd')<<qi

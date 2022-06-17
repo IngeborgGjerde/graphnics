@@ -4,13 +4,6 @@ from fenics import *
 
 '''
 The FenicsGraph class constructs fenics meshes from networkx directed graphs.
-The mesh and graph have share the order for edges/cells and nodes/vertices
-
-For now we assume there is one fenics cell per edge. 
-
-TODO: 
-    * Implement mesh refinement
-
 '''
 
 
@@ -28,7 +21,8 @@ class FenicsGraph(nx.DiGraph):
     Attributes:
         global_mesh (df.mesh): mesh for the entire graph
         edges[i].mesh (df.mesh): submesh for edge i
-        mf (df.function): 1d meshfunction gives maps cell->edge number
+        mf (df.function): 1d meshfunction that maps cell->edge number
+        vf (df.function): 0d meshfunction on  edges[i].mesh that stores bifurcation and boundary point data
         global_tangent (df.function): tangent vector for the global mesh, points along edge
     '''
 
@@ -38,12 +32,13 @@ class FenicsGraph(nx.DiGraph):
 
         self.global_mesh = None # global mesh for all the edges in the graph
 
-    def make_mesh(self): 
+    def make_mesh(self, n=1): 
         '''
-        Makes a fenics mesh on the graph with 1 cell on each edge
+        Makes a fenics mesh on the graph with n cells on each edge
         The full mesh is stored in self.global_mesh and a submesh is stored
         for each edge
         '''
+
 
         # Store the coordinate dimensions
         geom_dim = len(self.nodes[1]['pos']) 
@@ -52,8 +47,9 @@ class FenicsGraph(nx.DiGraph):
         # Make list of vertex coordinates and the cells connecting them
         vertex_coords = np.asarray( [self.nodes[v]['pos'] for v in self.nodes()  ] )
         cells_array = np.asarray( [ [u, v] for u,v in self.edges() ] )
-        # Write mesh to file
 
+
+        # We first make a mesh with 1 cell per edge
         mesh = Mesh()
         editor = MeshEditor()
         editor.open(mesh, "interval", 1, geom_dim)
@@ -65,41 +61,36 @@ class FenicsGraph(nx.DiGraph):
 
         editor.close()
 
+
         # Make meshfunction containing edge ixs
         mf = MeshFunction('size_t', mesh, 1)
         mf.array()[:]=range(0,len(self.edges()))
         self.mf = mf
 
-        # Store one mesh for each edge
-        for i, (u,v) in enumerate(self.edges):
-            self.edges[u,v]['submesh']=MeshView.create(mf, i)
+        
+        # Refine global mesh until desired resolution
+        for i in range(0, n):
+            mesh = refine(mesh)
+            mf = adapt(mf, mesh)
 
+        # Store refined global mesh and refined mesh function marking branches
         self.global_mesh = mesh
-        
+        self.mf = mf
 
-        # Make list of bifurcation nodes (connected to three or more edges)
-        # and boundary nodes (connected to one edge)
-        bifurcation_ixs = []
-        boundary_ixs = []
-        for v in self.nodes():
-            num_conn_edges = len(self.in_edges(v)) + len(self.out_edges(v))
-            
-            if num_conn_edges==3: 
-                bifurcation_ixs.append(v)
-            
-            elif num_conn_edges==1: 
-                boundary_ixs.append(v)            
-        
-        # Store these as global variables
-        self.bifurcation_ixs = bifurcation_ixs
-        self.boundary_ixs = boundary_ixs
 
-        
+        # Make and store one submesh for each edge
+        for i, (u,v) in enumerate(self.edges):
+            self.edges[u,v]['submesh']=MeshView.create(self.mf, i)
+
+        # Compute tangent vectors
+        self.assign_tangents()
+
+
+
         # Give each edge a Meshfunction that marks the vertex if its a boundary node 
         # or a bifurcation node
-        # A bifurcation node is tagged 1 if the edge points into it or 2 if the edge points 
-        # out of it
-        # A boundary node is tagged 3 if the edge points into it or 4 if the edge points out of it
+        # A bifurcation node is tagged BIF_IN if the edge points into it or BIF_OUT if the edge points out of it
+        # A boundary node is tagged BOUN_IN if the edge points into it or BOUN_OUT if the edge points out of it
 
         # Initialize meshfunction for each edge
         for e in self.edges():
@@ -107,8 +98,20 @@ class FenicsGraph(nx.DiGraph):
             vf = MeshFunction('size_t', msh, 0, 0)
             self.edges[e]['vf'] = vf
 
+        # Make list of bifurcation nodes (connected to three or more edges)
+        # and boundary nodes (connected to one edge)
+        D = nx.adj_matrix(self).todense()
+        conns1 = np.asarray([np.sum(D[i,:]) for i in range(0, D.shape[0])]) # positive connection?
+        conns2 = np.asarray([np.sum(D[:,i]) for i in range(0, D.shape[0])]) # negative connection?
+        conns = conns1+conns2
+
+        # Store these as global variables
+        self.bifurcation_ixs = list(np.where(conns==3)[0])
+        self.boundary_ixs = list(np.where(conns==1)[0])
+
+
         # Loop through all bifurcation ixs and mark the vfs
-        for b in bifurcation_ixs:
+        for b in self.bifurcation_ixs:
 
             for e in self.in_edges(b):
                 msh = self.edges[e]['submesh']
@@ -124,7 +127,7 @@ class FenicsGraph(nx.DiGraph):
                 bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0][0]
                 vf.array()[bif_ix_in_submesh]=BIF_OUT 
 
-        for b in boundary_ixs:
+        for b in self.boundary_ixs:
             for e in self.in_edges(b):
                 msh = self.edges[e]['submesh']
                 vf = self.edges[e]['vf']
@@ -138,8 +141,7 @@ class FenicsGraph(nx.DiGraph):
 
                 bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0][0]
                 vf.array()[bif_ix_in_submesh]=BOUN_OUT
-
-        self.assign_tangents()
+            
 
 
     def assign_tangents(self):
@@ -211,6 +213,7 @@ class TangentFunction(UserExpression):
         return (self.G.geom_dim,)
 
 
+
 def copy_from_nx_graph(G_nx):
     '''
     Return deep copy of nx.Graph as FenicsGraph
@@ -247,6 +250,8 @@ def test_fenics_graph():
         assert len(vertex_ix)==1, 'vertex coordinate is not a mesh coordinate'
         
         
+
+
 
 
 if __name__ == '__main__':

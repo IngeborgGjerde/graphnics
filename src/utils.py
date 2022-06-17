@@ -1,21 +1,84 @@
 from fenics import *
 
-def read_h5_mesh(loc):
-    meshf = HDF5File(MPI.comm_world, loc, "r")
-    mesh = Mesh()
-    meshf.read(mesh, varname, False)
-    meshf.close()  
-    return mesh
+def mixed_dim_fenics_solve(a, L, W, mesh):
+        
+    # Assemble the system
+    qp0 = Function(W)
+    system = assemble_mixed_system(a == L, qp0)
+    A_list = system[0]
+    rhs_blocks = system[1]
 
-def read_h5_func(W, loc, varname):
-    upf = HDF5File(W.mesh().mpi_comm(), loc, "r")
-    up = Function(W)
-    upf.read(up, varname)
-    upf.close()
-    return up
+    # Solve the system
+    A_ = PETScNestMatrix(A_list) # recombine blocks
+    b_ = Vector()
+    A_.init_vectors(b_, rhs_blocks)
+    A_.convert_to_aij() # Convert MATNEST to AIJ for LU solver
+
+    sol_ = Vector(mesh.mpi_comm(), sum([P2.dim() for P2 in W.sub_spaces()]))
+    solver = PETScLUSolver()
+    solver.solve(A_, sol_, b_)
+
+    # Transform sol_ into qp0 and update qp_
+    dim_shift = 0
+    for s in range(W.num_sub_spaces()):
+        qp0.sub(s).vector().set_local(sol_.get_local()[dim_shift:dim_shift + qp0.sub(s).function_space().dim()])
+        dim_shift += qp0.sub(s).function_space().dim()
+        qp0.sub(s).vector().apply("insert")
+    return qp0
 
 
-def write_HDF5file(var, mesh, fname, varname):
-    file = HDF5File(mesh.mpi_comm(), fname, "w")
-    file.write(var, varname)
-    file.close()
+
+def assemble_global_flux(qs, G):
+    [q.set_allow_extrapolation(True) for q in qs]
+
+    #global_DG2 = FunctionSpace(G.global_mesh, 'DG', 2)
+    #q_e = [interpolate(q, global_DG2) for q in qs]
+    #q_global = 0
+    #for i in range(0,len(q_e)):
+    #    q_global += q_e[i]*CharacteristicFunction(G,i)
+
+    #q_global = project(q_global)
+    #return q_global
+    pass
+
+
+class GlobalFlux(UserExpression):
+    '''
+    Evaluated P2 flux on each edge
+    '''
+    def __init__(self, G, qs, **kwargs):
+        '''
+        Args:
+            G (nx.graph): Network graph
+            qs (list): list of fluxes on each edge in the branch
+        '''
+        super().__init__(**kwargs)
+        self.G=G
+        self.qs = qs
+
+    def eval_cell(self, values, x, cell):
+        edge = self.G.mf[cell.index]
+        values[0] = self.qs[edge](x)
+    
+    def value_shape(self):
+        return ()
+
+class CharacteristicFunction(UserExpression):
+    '''
+    Characteristic function on edge i
+    '''
+    def __init__(self, G, edge, **kwargs):
+        '''
+        Args:
+            G (nx.graph): Network graph
+            edge (int): edge index
+        '''
+        super().__init__(**kwargs)
+        self.G=G
+        self.edge=edge
+
+    def eval_cell(self, values, x, cell):
+        edge = self.G.mf[cell.index]
+        values[0] = (edge==self.edge)
+    
+    

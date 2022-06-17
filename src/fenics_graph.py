@@ -162,6 +162,30 @@ class FenicsGraph(nx.DiGraph):
         self.global_tangent = tangent_i
         
 
+class GlobalFlux(UserExpression):
+    '''
+    Evaluated P2 flux on each edge
+    '''
+    def __init__(self, G, qs, **kwargs):
+        '''
+        Args:
+            G (nx.graph): Network graph
+            qs (list): list of fluxes on each edge in the branch
+        '''
+        
+        self.G=G
+        self.qs = qs
+        super().__init__(**kwargs)
+
+    def eval_cell(self, values, x, cell):
+        edge = self.G.mf[cell.index]
+        tangent = self.G.tangents[edge][1]
+        values[0] = self.qs[edge](x)*tangent[0]
+        values[1] = self.qs[edge](x)*tangent[1]
+        if self.G.geom_dim == 3: values[2] = self.qs[edge](x)*self.G.tangents[2]
+
+    def value_shape(self):
+        return (self.G.geom_dim,)
 
 class TangentFunction(UserExpression):
     '''

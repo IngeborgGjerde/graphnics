@@ -66,6 +66,7 @@ class FenicsGraph(nx.DiGraph):
         mf = MeshFunction('size_t', mesh, 1)
         mf.array()[:]=range(0,len(self.edges()))
         self.mf = mf
+        File('plots/test.pvd')<<mf
 
         
         # Refine global mesh until desired resolution
@@ -98,16 +99,24 @@ class FenicsGraph(nx.DiGraph):
             vf = MeshFunction('size_t', msh, 0, 0)
             self.edges[e]['vf'] = vf
 
-        # Make list of bifurcation nodes (connected to three or more edges)
+        # Make list of bifurcation nodes (connected to two or more edges)
         # and boundary nodes (connected to one edge)
-        D = nx.adj_matrix(self).todense()
-        conns1 = np.asarray([np.sum(D[i,:]) for i in range(0, D.shape[0])]) # positive connection?
-        conns2 = np.asarray([np.sum(D[:,i]) for i in range(0, D.shape[0])]) # negative connection?
-        conns = conns1+conns2
+        bifurcation_ixs = []
+        boundary_ixs = []
+        for v in self.nodes():
+            num_conn_edges = len(self.in_edges(v)) + len(self.out_edges(v))
+                    
+            if num_conn_edges==1: 
+                boundary_ixs.append(v) 
+            elif num_conn_edges>1: 
+                bifurcation_ixs.append(v)
+            elif num_conn_edges==0:
+                print(f'Node {v} in G is lonely (i.e. unconnected)')
 
         # Store these as global variables
-        self.bifurcation_ixs = list(np.where(conns==3)[0])
-        self.boundary_ixs = list(np.where(conns==1)[0])
+        self.bifurcation_ixs = bifurcation_ixs
+        print(bifurcation_ixs)
+        self.boundary_ixs = boundary_ixs
 
 
         # Loop through all bifurcation ixs and mark the vfs
@@ -117,31 +126,35 @@ class FenicsGraph(nx.DiGraph):
                 msh = self.edges[e]['submesh']
                 vf = self.edges[e]['vf']
 
-                bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0][0]
-                vf.array()[bif_ix_in_submesh]=BIF_IN
+                bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0]
+                if bif_ix_in_submesh:
+                    vf.array()[bif_ix_in_submesh[0]]=BIF_IN
 
             for e in self.out_edges(b):
                 msh = self.edges[e]['submesh']
                 vf = self.edges[e]['vf']
 
-                bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0][0]
-                vf.array()[bif_ix_in_submesh]=BIF_OUT 
+                bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0]
+                if bif_ix_in_submesh:
+                    vf.array()[bif_ix_in_submesh[0]]=BIF_OUT 
 
         for b in self.boundary_ixs:
             for e in self.in_edges(b):
                 msh = self.edges[e]['submesh']
                 vf = self.edges[e]['vf']
 
-                bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0][0]
-                vf.array()[bif_ix_in_submesh]=BOUN_IN
+                bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0]
+                if bif_ix_in_submesh:
+                    vf.array()[bif_ix_in_submesh[0]]=BOUN_OUT 
 
             for e in self.out_edges(b):
                 msh = self.edges[e]['submesh']
                 vf = self.edges[e]['vf']
 
-                bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0][0]
-                vf.array()[bif_ix_in_submesh]=BOUN_OUT
-            
+                bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0]
+                if bif_ix_in_submesh:
+                    vf.array()[bif_ix_in_submesh[0]]=BOUN_IN 
+
 
 
     def assign_tangents(self):
@@ -184,7 +197,8 @@ class GlobalFlux(UserExpression):
         tangent = self.G.tangents[edge][1]
         values[0] = self.qs[edge](x)*tangent[0]
         values[1] = self.qs[edge](x)*tangent[1]
-        if self.G.geom_dim == 3: values[2] = self.qs[edge](x)*self.G.tangents[2]
+        if self.G.geom_dim == 3: 
+            values[2] = self.qs[edge](x)*tangent[2]
 
     def value_shape(self):
         return (self.G.geom_dim,)

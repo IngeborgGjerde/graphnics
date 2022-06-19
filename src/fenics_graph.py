@@ -186,6 +186,29 @@ class FenicsGraph(nx.DiGraph):
         return dot(grad(f), self.global_tangent)
 
 
+    def ip_jump_lm(self, qs, xi, i):
+        '''
+        Returns the inner product between the jump of edge fluxes q
+        and the lagrange multiplier xi over bifurcation i
+        '''
+
+        edge_list = list(self.edges.keys())
+
+        ip = 0
+        for e in self.in_edges(i):
+            ds_edge = Measure('ds', domain=self.edges[e]['submesh'], subdomain_data=self.edges[e]['vf'])
+            edge_ix = edge_list.index(e)
+            ip += qs[edge_ix]*xi*ds_edge(BIF_IN)
+
+        for e in self.out_edges(i):
+            ds_edge = Measure('ds', domain=self.edges[e]['submesh'], subdomain_data=self.edges[e]['vf'])
+            edge_ix = edge_list.index(e)
+            ip -= qs[edge_ix]*xi*ds_edge(BIF_OUT)
+
+        return ip
+
+
+
 class GlobalFlux(UserExpression):
     '''
     Evaluated P2 flux on each edge

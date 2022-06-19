@@ -51,7 +51,7 @@ def hydraulic_network_model(G, inlets=[], outlets=[]):
     L = Constant(0)*phi*dx
 
 
-    # We assemble a and L edge by edge
+    # Assemble edge contributions to a and L
     for i, e in enumerate(G.edges):
         
         msh = G.edges[e]['submesh']
@@ -65,34 +65,21 @@ def hydraulic_network_model(G, inlets=[], outlets=[]):
         a -= p*G.dds(vs[i])*dx_edge
         a += phi*G.dds(qs[i])*dx_edge
 
-        
-        # Add bifurcation condition contribution from this edge
-        node_out, node_in = e # the edge goes from one node to the other
-        
-        # If node_out is bifurcation point we add contributions from lagrange multipliers
-        if node_out in G.bifurcation_ixs:
-            node_lm_ix = G.bifurcation_ixs.index(node_out) 
-            a += qs[i]*xis[node_lm_ix]*ds_edge(BIF_OUT)
-            a += vs[i]*lams[node_lm_ix]*ds_edge(BIF_OUT) 
-        
-        # same if node_in is a bifurcation point
-        if node_in in G.bifurcation_ixs:
-            node_lm_ix = G.bifurcation_ixs.index(node_in)  
-            a -= qs[i]*xis[node_lm_ix]*ds_edge(BIF_IN)
-            a -= vs[i]*lams[node_lm_ix]*ds_edge(BIF_IN) 
-        
-        
-        
         # Add boundary condition for inflow/outflow boundary node
         for inlet_tag in inlets:
             L += Expression('x[1]', degree=2)*vphi[i]*ds_edge(inlet_tag)
         for outlet_tag in outlets:
             L -= Expression('x[1]', degree=2)*vphi[i]*ds_edge(outlet_tag)
 
+
+    # Assemble vertex contribution to a, i.e. the bifurcation condition
+    for i, b in enumerate(G.bifurcation_ixs):
+        a += G.ip_jump_lm(qs, xis[i], b) + G.ip_jump_lm(vs, lams[i], b)
+    
+        
     # Solve
     qp0 = mixed_dim_fenics_solve(a, L, W, mesh)
     return qp0
-
 
 
 
@@ -144,7 +131,7 @@ if __name__ == '__main__':
 
     # Make simple graph
     from graph_examples import *
-    G = honeycomb(3,3)
+    G = honeycomb(1,1)
     #G = make_double_Y_bifurcation()
     G.make_mesh(1)
     qp0 = hydraulic_network_model(G, inlets=[BOUN_OUT])

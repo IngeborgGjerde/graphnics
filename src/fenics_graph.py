@@ -104,8 +104,9 @@ class FenicsGraph(nx.DiGraph):
         bifurcation_ixs = []
         boundary_ixs = []
         for v in self.nodes():
+            
             num_conn_edges = len(self.in_edges(v)) + len(self.out_edges(v))
-                    
+            
             if num_conn_edges==1: 
                 boundary_ixs.append(v) 
             elif num_conn_edges>1: 
@@ -115,10 +116,8 @@ class FenicsGraph(nx.DiGraph):
 
         # Store these as global variables
         self.bifurcation_ixs = bifurcation_ixs
-        print(bifurcation_ixs)
         self.boundary_ixs = boundary_ixs
-
-
+        
         # Loop through all bifurcation ixs and mark the vfs
         for b in self.bifurcation_ixs:
 
@@ -127,7 +126,7 @@ class FenicsGraph(nx.DiGraph):
                 vf = self.edges[e]['vf']
 
                 bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0]
-                if bif_ix_in_submesh:
+                if len(bif_ix_in_submesh)>0:
                     vf.array()[bif_ix_in_submesh[0]]=BIF_IN
 
             for e in self.out_edges(b):
@@ -135,7 +134,7 @@ class FenicsGraph(nx.DiGraph):
                 vf = self.edges[e]['vf']
 
                 bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0]
-                if bif_ix_in_submesh:
+                if len(bif_ix_in_submesh)>0:
                     vf.array()[bif_ix_in_submesh[0]]=BIF_OUT 
 
         for b in self.boundary_ixs:

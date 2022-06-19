@@ -42,26 +42,7 @@ def assemble_global_flux(qs, G):
     pass
 
 
-class GlobalFlux(UserExpression):
-    '''
-    Evaluated P2 flux on each edge
-    '''
-    def __init__(self, G, qs, **kwargs):
-        '''
-        Args:
-            G (nx.graph): Network graph
-            qs (list): list of fluxes on each edge in the branch
-        '''
-        super().__init__(**kwargs)
-        self.G=G
-        self.qs = qs
 
-    def eval_cell(self, values, x, cell):
-        edge = self.G.mf[cell.index]
-        values[0] = self.qs[edge](x)
-    
-    def value_shape(self):
-        return ()
 
 class CharacteristicFunction(UserExpression):
     '''

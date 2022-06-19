@@ -14,6 +14,7 @@ BOUN_IN = 3
 BOUN_OUT = 4
 
 
+
 class FenicsGraph(nx.DiGraph):
     '''
     Make fenics mesh from networkx directed graph
@@ -43,6 +44,8 @@ class FenicsGraph(nx.DiGraph):
         # Store the coordinate dimensions
         geom_dim = len(self.nodes[1]['pos']) 
         self.geom_dim = geom_dim
+
+        self.num_edges = len(self.edges)
 
         # Make list of vertex coordinates and the cells connecting them
         vertex_coords = np.asarray( [self.nodes[v]['pos'] for v in self.nodes()  ] )
@@ -175,6 +178,13 @@ class FenicsGraph(nx.DiGraph):
         tangent_i = interpolate(tangent, VectorFunctionSpace(self.global_mesh, 'DG', 0, self.geom_dim) )
         self.global_tangent = tangent_i
         
+    
+    def dds(self, f):
+        '''
+        UFL function for derivative d/ds along graph
+        '''
+        return dot(grad(f), self.global_tangent)
+
 
 class GlobalFlux(UserExpression):
     '''

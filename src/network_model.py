@@ -5,23 +5,14 @@ from utils import *
 from graph_examples import *
     
 
-def dds_on_G(f,G):
-    return dot(grad(f), G.global_tangent)
 
 
 def hydraulic_network_model(G, inlets=[], outlets=[]):
 
-    # Make list of edges
-    edges= list(nx.get_edge_attributes(G, 'submesh').keys())
-    num_edges = len(edges)
-    # and list of submeshes
-    submeshes = list(nx.get_edge_attributes(G, 'submesh').values())
-    
     mesh = G.global_mesh
 
-    ### Function spaces
-
     # Flux spaces on each segment, ordered by the edge list
+    submeshes = list(nx.get_edge_attributes(G, 'submesh').values())
     P2s = [FunctionSpace(msh, 'CG', 2) for msh in submeshes] 
     
     # Real space on each bifurcation, ordered by G.bifurcation_ixs
@@ -30,7 +21,7 @@ def hydraulic_network_model(G, inlets=[], outlets=[]):
     # Pressure space on global mesh
     P1 = FunctionSpace(mesh, 'CG', 1) # Pressure space (on whole mesh)
     
-
+    ### Function spaces
     spaces = P2s + LMs + [P1]
     W = MixedFunctionSpace(*spaces) 
 
@@ -40,69 +31,63 @@ def hydraulic_network_model(G, inlets=[], outlets=[]):
     qp = TrialFunctions(W)
 
     # split out the components
-    qs = qp[0:len(edges)]
-    lams = qp[len(edges):-1]
+    qs = qp[0:G.num_edges]
+    lams = qp[G.num_edges:-1]
     p = qp[-1]
 
-    vs = vphi[0:len(edges)]
-    xis = vphi[len(edges):-1]
+    vs = vphi[0:G.num_edges]
+    xis = vphi[G.num_edges:-1]
     phi = vphi[-1]
 
-    
-
-    # Specify branch integration measure
-    dx = Measure('dx', domain=mesh)
-    dx_ = [Measure("dx", domain = msh) for msh in submeshes]
-    
 
     ## Assemble variational formulation 
 
     # Initialize blocks in a and L to zero
     # (so fenics-mixed-dim does not throw an error)
+    dx = Measure('dx', domain=mesh)
     a = Constant(0)*p*phi*dx
     for ix in range(0, len(G.bifurcation_ixs)):
         a += Constant(0)*lams[ix]*xis[ix]*dx
     L = Constant(0)*phi*dx
 
-    # d/ds is defined as d/ds=dot(grad, t), with t being 
-    # the tangent vector
-    def dds(f):
-        return dds_on_G(f,G)
 
-    # Add in branch contributions
-    for i in range(0, len(edges)):
-        a += qs[i]*vs[i]*dx_[i]        #  
-        a -= p*dds(vs[i])*dx_[i]
-        a += phi*dds(qs[i])*dx_[i]
-
-
-    # Add in vertex contributions
-    for branch_ix, e in enumerate(edges):
+    # We assemble a and L edge by edge
+    for i, e in enumerate(G.edges):
+        
         msh = G.edges[e]['submesh']
         vf = G.edges[e]['vf']
+        
+        dx_edge = Measure("dx", domain = msh)
+        ds_edge = Measure('ds', domain=msh, subdomain_data=vf)
 
-        ds_branch = Measure('ds', domain=msh, subdomain_data=vf)
+        # Add variational terms defined on edge
+        a += qs[i]*vs[i]*dx_edge        
+        a -= p*G.dds(vs[i])*dx_edge
+        a += phi*G.dds(qs[i])*dx_edge
 
-        # Add bifurcation condition 
+        
+        # Add bifurcation condition contribution from this edge
         node_out, node_in = e # the edge goes from one node to the other
         
         # If node_out is bifurcation point we add contributions from lagrange multipliers
         if node_out in G.bifurcation_ixs:
             node_lm_ix = G.bifurcation_ixs.index(node_out) 
-            a += qs[branch_ix]*xis[node_lm_ix]*ds_branch(BIF_OUT)
-            a += vs[branch_ix]*lams[node_lm_ix]*ds_branch(BIF_OUT) 
+            a += qs[i]*xis[node_lm_ix]*ds_edge(BIF_OUT)
+            a += vs[i]*lams[node_lm_ix]*ds_edge(BIF_OUT) 
         
         # same if node_in is a bifurcation point
         if node_in in G.bifurcation_ixs:
-            node_lm_ix = G.bifurcation_ixs.index(node_in) # 
-            a -= qs[branch_ix]*xis[node_lm_ix]*ds_branch(BIF_IN)
-            a -= vs[branch_ix]*lams[node_lm_ix]*ds_branch(BIF_IN) 
+            node_lm_ix = G.bifurcation_ixs.index(node_in)  
+            a -= qs[i]*xis[node_lm_ix]*ds_edge(BIF_IN)
+            a -= vs[i]*lams[node_lm_ix]*ds_edge(BIF_IN) 
+        
+        
         
         # Add boundary condition for inflow/outflow boundary node
         for inlet_tag in inlets:
-            L += Expression('x[1]', degree=2)*vphi[branch_ix]*ds_branch(inlet_tag)
+            L += Expression('x[1]', degree=2)*vphi[i]*ds_edge(inlet_tag)
         for outlet_tag in outlets:
-            L -= Expression('x[1]', degree=2)*vphi[branch_ix]*ds_branch(outlet_tag)
+            L -= Expression('x[1]', degree=2)*vphi[i]*ds_edge(outlet_tag)
 
     # Solve
     qp0 = mixed_dim_fenics_solve(a, L, W, mesh)

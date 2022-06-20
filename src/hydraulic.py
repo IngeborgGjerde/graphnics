@@ -6,10 +6,13 @@ from graph_examples import *
     
 
 
-
-def hydraulic_network_model(G, inlets=[], outlets=[]):
+def hydraulic_network_model(G, fluid_params, inlets=[], outlets=[]):
 
     mesh = G.global_mesh
+
+    rho = Constant(fluid_params['rho'])
+    nu = Constant(fluid_params['nu'])
+    Ainv = Constant(1)
 
     # Flux spaces on each segment, ordered by the edge list
     submeshes = list(nx.get_edge_attributes(G, 'submesh').values())
@@ -61,7 +64,7 @@ def hydraulic_network_model(G, inlets=[], outlets=[]):
         ds_edge = Measure('ds', domain=msh, subdomain_data=vf)
 
         # Add variational terms defined on edge
-        a += qs[i]*vs[i]*dx_edge        
+        a += nu*Ainv*rho*qs[i]*vs[i]*dx_edge        
         a -= p*G.dds(vs[i])*dx_edge
         a += phi*G.dds(qs[i])*dx_edge
 
@@ -83,6 +86,38 @@ def hydraulic_network_model(G, inlets=[], outlets=[]):
 
 
 
+
+
+if __name__ == '__main__':
+
+    # Make simple graph
+    from graph_examples import *
+    G = honeycomb(3,3)
+    #G = make_double_Y_bifurcation()
+    G.make_mesh(1)
+    
+    fluid_params = {'rho':1, 'nu':1}
+    
+
+    qp0 = hydraulic_network_model(G, fluid_params, inlets=[BOUN_OUT])
+
+    vars = qp0.split()
+    p = vars[-1]
+    
+    q = GlobalFlux(G, vars[0:-2])
+    qi = interpolate(q, VectorFunctionSpace(G.global_mesh, 'DG', 2, G.geom_dim))
+    p = vars[-1]
+    
+    qi.rename('q', '0.0')
+    p.rename('p', '0.0')
+    File('plots/p.pvd')<<p
+    File('plots/q.pvd')<<qi
+    G.global_tangent.rename('tau', '0.0')
+    File('plots/tangent.pvd')<<G.global_tangent
+
+
+
+
 def test_mass_conservation():
 
     # Test mass conservation on double y bifurcation mesh
@@ -91,6 +126,7 @@ def test_mass_conservation():
     Gs = []
     Gs.append(make_double_Y_bifurcation())
     Gs.append(honeycomb(1,1))
+
 
     for G in Gs:
         G.make_mesh(0)
@@ -125,55 +161,3 @@ def test_mass_conservation():
                     flux_out += vars[branch_ix](b_coord)
             
             assert near(flux_in, flux_out, 1e-3), f'Mass is not conserved at bifurcation {b}'
-
-
-if __name__ == '__main__':
-
-    # Make simple graph
-    from graph_examples import *
-    G = honeycomb(1,1)
-    #G = make_double_Y_bifurcation()
-    G.make_mesh(1)
-    qp0 = hydraulic_network_model(G, inlets=[BOUN_OUT])
-
-    vars = qp0.split()
-    p = vars[-1]
-    
-    q = GlobalFlux(G, vars[0:-2])
-    qi = interpolate(q, VectorFunctionSpace(G.global_mesh, 'DG', 2, G.geom_dim))
-    p = vars[-1]
-    
-    qi.rename('q', '0.0')
-    p.rename('p', '0.0')
-    File('plots/p.pvd')<<p
-    File('plots/q.pvd')<<qi
-    G.global_tangent.rename('tau', '0.0')
-    File('plots/tangent.pvd')<<G.global_tangent
-
-
-
-    # Port to scipy 
-    #from scipy.sparse import coo_matrix, bmat
-    #A_arrays_flattened = [coo_matrix(block.array()) for block in A_list]
-    #A = bmat([A_arrays_flattened[len(spaces)*i:len(spaces)*(i+1)] for i in range(0, len(spaces))])
-
-    #b = np.concatenate( [block.get_local() for block in rhs_blocks] )
-    
-
-    # Input bifurcation-jump contribution
-    #c = mesh.coordinates()
-    #for b_ix in G.bifurcation_ixs:
-    #    vertex_ix = np.where((c == c[1,:]).all(axis=1))[0][0]
-
-        #for e in G.edges():
-
-    #scipy.sparse.linalg.spsolve(A, b, permc_spec=None, use_umfpack=True)
-
-
-    #mesh_file = "mesh.xdmf"
-    #with XDMFFile(mesh.mpi_comm(), mesh_file) as out:
-    #    out.write(mesh)
-        
-    #mesh = Mesh()
-    #with XDMFFile(MPI.comm_world, mesh_file) as xdmf:
-    #    xdmf.read(mesh)

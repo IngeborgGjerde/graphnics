@@ -4,6 +4,8 @@ from fenics import *
 
 '''
 The FenicsGraph class constructs fenics meshes from networkx directed graphs.
+
+TODO: Add possibility for specifying Dirichlet bc nodes
 '''
 
 
@@ -22,9 +24,11 @@ class FenicsGraph(nx.DiGraph):
     Attributes:
         global_mesh (df.mesh): mesh for the entire graph
         edges[i].mesh (df.mesh): submesh for edge i
+        global_tangent (df.function): tangent vector for the global mesh, points along edge
+        dds (function): derivative d/ds along edge
         mf (df.function): 1d meshfunction that maps cell->edge number
         vf (df.function): 0d meshfunction on  edges[i].mesh that stores bifurcation and boundary point data
-        global_tangent (df.function): tangent vector for the global mesh, points along edge
+        num_edges (int): number of edges in graph
     '''
 
 
@@ -146,7 +150,7 @@ class FenicsGraph(nx.DiGraph):
                 vf = self.edges[e]['vf']
 
                 bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0]
-                if bif_ix_in_submesh:
+                if len(bif_ix_in_submesh)>0:
                     vf.array()[bif_ix_in_submesh[0]]=BOUN_OUT 
 
             for e in self.out_edges(b):
@@ -154,7 +158,7 @@ class FenicsGraph(nx.DiGraph):
                 vf = self.edges[e]['vf']
 
                 bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0]
-                if bif_ix_in_submesh:
+                if len(bif_ix_in_submesh)>0:
                     vf.array()[bif_ix_in_submesh[0]]=BOUN_IN 
 
 
@@ -181,15 +185,23 @@ class FenicsGraph(nx.DiGraph):
     
     def dds(self, f):
         '''
-        UFL function for derivative d/ds along graph
+        function for derivative df/ds along graph
         '''
         return dot(grad(f), self.global_tangent)
 
 
     def ip_jump_lm(self, qs, xi, i):
         '''
-        Returns the inner product between the jump of edge fluxes q
+        Returns the inner product between the jump of edge fluxes [qs]
         and the lagrange multiplier xi over bifurcation i
+        
+        Args:
+            qs (list): list of edge flux functions
+            xi (df.function): lagrange multiplier on bifurcation i
+            i (int): bifurcation index
+
+        Returns:
+            ip 
         '''
 
         edge_list = list(self.edges.keys())
@@ -211,7 +223,7 @@ class FenicsGraph(nx.DiGraph):
 
 class GlobalFlux(UserExpression):
     '''
-    Evaluated P2 flux on each edge
+    Evaluates P2 flux on each edge
     '''
     def __init__(self, G, qs, **kwargs):
         '''
@@ -234,6 +246,7 @@ class GlobalFlux(UserExpression):
 
     def value_shape(self):
         return (self.G.geom_dim,)
+
 
 class TangentFunction(UserExpression):
     '''
@@ -280,7 +293,6 @@ def copy_from_nx_graph(G_nx):
 def test_fenics_graph():
     # Make simple y-bifurcation
 
-
     G = FenicsGraph()
     from graph_examples import make_Y_bifurcation
     G = make_Y_bifurcation()
@@ -296,9 +308,6 @@ def test_fenics_graph():
         assert len(vertex_ix)==1, 'vertex coordinate is not a mesh coordinate'
         
         
-
-
-
 
 if __name__ == '__main__':
     

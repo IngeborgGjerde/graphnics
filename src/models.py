@@ -6,7 +6,7 @@ from graph_examples import *
     
 
 
-def hydraulic_network(G, f=Constant(0)):
+def hydraulic_network(G, f=Constant(0), p_bc=Constant(0)):
     '''
     Solve hydraulic network model 
         R q + d/ds p = 0
@@ -16,8 +16,7 @@ def hydraulic_network(G, f=Constant(0)):
     Args:
         G (fg.FenicsGraph): problem domain
         f (df.function): source term
-        inlets (list): list of node ixs that are inlets
-        outlets (list): list of node ixs that are outlets
+        p_bc (df.function): neumann bc for pressure
     '''
     
     mesh = G.global_mesh
@@ -67,21 +66,19 @@ def hydraulic_network(G, f=Constant(0)):
         
         msh = G.edges[e]['submesh']
         vf = G.edges[e]['vf']
-        Res = G.edges[e]['Res']
+        res = G.edges[e]['res']
         
         dx_edge = Measure("dx", domain = msh)
         ds_edge = Measure('ds', domain=msh, subdomain_data=vf)
 
         # Add variational terms defined on edge
-        a += Res*qs[i]*vs[i]*dx_edge        
+        a += res*qs[i]*vs[i]*dx_edge        
         a -= p*G.dds(vs[i])*dx_edge
         a += phi*G.dds(qs[i])*dx_edge
 
         # Add boundary condition for inflow/outflow boundary node
-        for inlet_tag in G.neumann_inlets:
-            L += Expression('x[1]', degree=2)*vphi[i]*ds_edge(inlet_tag)
-        for outlet_tag in G.neumann_outlets:
-            L -= Expression('x[1]', degree=2)*vphi[i]*ds_edge(outlet_tag)
+        L += p_bc*vs[i]*ds_edge(BOUN_IN)
+        L -= p_bc*vs[i]*ds_edge(BOUN_OUT)
 
 
     # Assemble vertex contribution to a, i.e. the bifurcation condition
@@ -274,7 +271,7 @@ def test_mass_conservation():
 def test_reduced_stokes():
     ''''
     Test approximation of reduced stokes against analytic solution
-    
+
     '''
 
     G = make_line_graph(3)
@@ -342,4 +339,5 @@ def test_reduced_stokes():
     assert p_l2_error < 0.001, 'Network Stokes flux solution not correct'
 
 if __name__ == '__main__':
+    test_mass_conservation()
     test_reduced_stokes()

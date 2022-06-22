@@ -16,9 +16,10 @@ You can then enter the container by running
 ```
 docker exec -it networkfenics /bin/bash
 ```
-To connect it to a jupyter noter, run
+To connect it to a jupyter notebook, run
 ```
 docker logs networkfenics
 ```
 and enter the html-links it provides in your browser.
 
+[<img alt="alt_text" width="400px" src="honeycomb.png" />]([https://www.google.com/](https://github.com/IngeborgGjerde/fenics-networks/honeycomb.png?raw=true))

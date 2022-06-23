@@ -54,7 +54,11 @@ def hydraulic_network_with_custom_assembly(G, f=Constant(0), p_bc=Constant(0)):
     a = Constant(0)*p*phi*dx
     L = Constant(0)*phi*dx
 
-    vecs = [G.jump_vector(q, ix, G.bifurcation_ixs[0]) for ix, q in enumerate(qs)]
+
+    # Using methodology from firedrake we assemble the jumps as a vector
+    # and input the jumps in the matrix later
+    vecs = [[G.jump_vector(q, ix, j) for j in G.bifurcation_ixs] for ix, q in enumerate(qs)] 
+    # now we can index by vecs[branch_ix][bif_ix]
 
     # Assemble edge contributions to a and L
     for i, e in enumerate(G.edges):
@@ -76,21 +80,31 @@ def hydraulic_network_with_custom_assembly(G, f=Constant(0), p_bc=Constant(0)):
         L -= p_bc*vs[i]*ds_edge(BOUN_OUT)
     
     # Solve
-    qp0 = mixed_dim_fenics_solve_custom(a, L, W, mesh, vecs)
+    qp0 = mixed_dim_fenics_solve_custom(a, L, W, mesh, vecs, G)
     return qp0
 
 
 
 if __name__ == '__main__':
-    
-    G = make_line_graph(3)
-    G.make_mesh(3)
-    mesh = G.global_mesh
 
     p_bc = Expression('x[0]', degree=1)
- 
-    qp0 = hydraulic_network_with_custom_assembly(G, p_bc = p_bc)
+    
+    import time
+    from models import hydraulic_network
+    import os
+    
+    for n in [24]:    
+        G = make_line_graph(n)
+        G.make_mesh(1)
+        mesh = G.global_mesh
+        num_bifs = len(G.bifurcation_ixs)
 
+        t = time.time()
+        qp0 = hydraulic_network_with_custom_assembly(G, p_bc = p_bc)
+        elapsed_standard = time.time()-t
+        
+        print(f'num bifurcations: {num_bifs}, solver time {elapsed_standard:1.3f}s')
+        
     vars = qp0.split()
     p = vars[-1]
     

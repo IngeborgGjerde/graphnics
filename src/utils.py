@@ -4,7 +4,7 @@ import scipy.sparse as sp
 from petsc4py import PETSc
 
 
-def mixed_dim_fenics_solve_custom(a, L, W, mesh, real_rows):
+def mixed_dim_fenics_solve_custom(a, L, W, mesh, jump_vecs, G):
         
     # Assemble the system
     qp0 = Function(W)
@@ -14,28 +14,56 @@ def mixed_dim_fenics_solve_custom(a, L, W, mesh, real_rows):
     rhs_blocks = system[1]
 
     # Convert our real rows to PetSc
-    rows = [convert_vec_to_petscmatrix(row) for row in real_rows]
-    # and get the transpos
-    rows_T = [PETScMatrix(row.mat().transpose(PETSc.Mat())) for row in rows]
+    jump_vecs = [[convert_vec_to_petscmatrix(row) for row in rowrow] for rowrow in jump_vecs] 
+    # and get the transpose
+    jump_vecs_T = [[PETScMatrix(row.mat().transpose(PETSc.Mat())) for row in rowrow] for rowrow in jump_vecs]
     
     zero = zero_PETScMat(1,1)
-    zero_row = zero_PETScMat(1,W.sub_space(2).dim())
-    zero_col = zero_PETScMat(W.sub_space(2).dim(),1)
+    zero_row = zero_PETScMat(1,W.sub_space(-1).dim())
+    zero_col = zero_PETScMat(W.sub_space(-1).dim(),1)
     
-    # Add lagrange multipliers
-    A_list_n = A_list[0:3] + [rows_T[0]]   # first row
-    A_list_n += A_list[3:6] + [rows_T[1]]  # second row
-    A_list_n += A_list[6:9] + [zero_col]     # third row  
-    A_list_n += rows  + [zero_row, zero]    # fourth row
+    ### Make new A_list with lagrange multipliers added
+    
+    # Size of the neqw ma
+    nrows_A_old = W.num_sub_spaces()
+    ncols_A_old = W.num_sub_spaces()
+    
+    num_bifs = len(G.bifurcation_ixs)
+    
+    A_list_n = []
+    
+    #vecs[branch_ix][bif_ix]
+    
+    # Add all the rows corresponding to q1, q2, ... q_n
+    for i in range(0, nrows_A_old-1):
+        A_list_n += A_list[ i*ncols_A_old : (i+1)*ncols_A_old ] # copy in old blocks
+        A_list_n += jump_vecs_T[i] # add the jump vectors for edge i
+
+    # Add the single row corresponding to the pressure
+    i+=1 # pressure row
+    A_list_n += A_list[ i*ncols_A_old : (i+1)*ncols_A_old ]  # copy in old blocks
+    A_list_n += [zero_col]*num_bifs # no jump in pressure so we add zero_cols 
+    
+    # Add rows corresponding to lagrange multipliers
+    for i in range(0, num_bifs): # lagrange multiplier row
+        for j in range(0, G.num_edges): 
+            A_list_n += [jump_vecs[j][i]]  # copy in the jump vectors
+        A_list_n += [zero_row] # no jump in pressure so we add a single zero row
+        A_list_n += [zero]*num_bifs # last block corresponds to (lam, xi)
+           
+    #A_list_n += A_list[0:3] + [rows_T[0]]  # first row
+    #A_list_n += A_list[3:6] + [rows_T[1]]  # second row
+    #A_list_n += A_list[6:9] + [zero_col]     # third row  
+    #A_list_n += rows  + [zero_row, zero]    # fourth row
     
     # Solve the system
     A_ = PETScNestMatrix(A_list_n) # recombine blocks now with Lagrange multipliers
     b_ = Vector()
-    rhs_blocks_n = rhs_blocks + [zero_PETScVec(1)]
+    rhs_blocks_n = rhs_blocks + [zero_PETScVec(1)]*num_bifs
     A_.init_vectors(b_, rhs_blocks_n)
     A_.convert_to_aij() # Convert MATNEST to AIJ for LU solver
 
-    sol_ = Vector(mesh.mpi_comm(), sum([P2.dim() for P2 in W.sub_spaces()]) + 1)
+    sol_ = Vector(mesh.mpi_comm(), sum([P2.dim() for P2 in W.sub_spaces()]) + num_bifs)
     solver = PETScLUSolver()
     solver.solve(A_, sol_, b_)
 

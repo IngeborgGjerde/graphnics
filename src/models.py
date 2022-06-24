@@ -18,6 +18,9 @@ def hydraulic_network(G, f=Constant(0), p_bc=Constant(0)):
         f (df.function): source term
         p_bc (df.function): neumann bc for pressure
     '''
+    import time    
+    t_ = time.time()
+    
     
     mesh = G.global_mesh
 
@@ -49,30 +52,35 @@ def hydraulic_network(G, f=Constant(0), p_bc=Constant(0)):
     xis = vphi[G.num_edges:-1]
     phi = vphi[-1]
 
-
+    elapsed = time.time()-t_
+    info = f'* Setting up spaces: {elapsed:1.3f}s' 
+    with open("profiling.txt",'a') as file:
+        file.write(info + '\n')
+    print(info)
+    t_ = time.time()
+    
     ## Assemble variational formulation 
 
     # Initialize blocks in a and L to zero
     # (so fenics-mixed-dim does not throw an error)
     dx = Measure('dx', domain=mesh)
     a = Constant(0)*p*phi*dx
-    for ix in range(0, len(G.bifurcation_ixs)):
-        a += Constant(0)*lams[ix]*xis[ix]*dx
+    #for ix in range(0, len(G.bifurcation_ixs)):
+    #    a += Constant(0)*lams[ix]*xis[ix]*dx
     L = Constant(0)*phi*dx
-
 
     # Assemble edge contributions to a and L
     for i, e in enumerate(G.edges):
         
         msh = G.edges[e]['submesh']
         vf = G.edges[e]['vf']
-        res = G.edges[e]['res']
+        #res = G.edges[e]['res']
         
         dx_edge = Measure("dx", domain = msh)
         ds_edge = Measure('ds', domain=msh, subdomain_data=vf)
 
         # Add variational terms defined on edge
-        a += res*qs[i]*vs[i]*dx_edge        
+        a += qs[i]*vs[i]*dx_edge        
         a -= p*G.dds(vs[i])*dx_edge
         a += phi*G.dds(qs[i])*dx_edge
 
@@ -80,12 +88,25 @@ def hydraulic_network(G, f=Constant(0), p_bc=Constant(0)):
         L += p_bc*vs[i]*ds_edge(BOUN_IN)
         L -= p_bc*vs[i]*ds_edge(BOUN_OUT)
 
+    elapsed = time.time()-t_
+    info = f'* Adding edge terms to varform: {elapsed:1.3f}s'
+    with open("profiling.txt",'a') as file:
+        file.write(info + '\n')
+    print(info)
+    t_ = time.time()
 
     # Assemble vertex contribution to a, i.e. the bifurcation condition
     for i, b in enumerate(G.bifurcation_ixs):
         a += G.ip_jump_lm(qs, xis[i], b) + G.ip_jump_lm(vs, lams[i], b)
     
-        
+    
+    elapsed = time.time()-t_
+    info = f'* Adding jump terms to varform: {elapsed:1.3f}s'
+    with open("profiling.txt",'a') as file:
+        file.write(info + '\n')
+    print(info)
+    t_ = time.time()
+    
     # Solve
     qp0 = mixed_dim_fenics_solve(a, L, W, mesh)
     return qp0

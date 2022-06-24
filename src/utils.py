@@ -8,7 +8,16 @@ def mixed_dim_fenics_solve_custom(a, L, W, mesh, jump_vecs, G):
         
     # Assemble the system
     qp0 = Function(W)
+    
+    import time
+    t_ = time.time()
     system = assemble_mixed_system(a == L, qp0)
+    elapsed = time.time()-t_
+    info = f'* Assemble mixed system: {elapsed:1.3f}s' 
+    with open("profiling.txt",'a') as file:
+        file.write(info + '\n')
+    print(info)
+    t_ = time.time()
     
     A_list = system[0]
     rhs_blocks = system[1]
@@ -55,6 +64,7 @@ def mixed_dim_fenics_solve_custom(a, L, W, mesh, jump_vecs, G):
     #A_list_n += A_list[3:6] + [rows_T[1]]  # second row
     #A_list_n += A_list[6:9] + [zero_col]     # third row  
     #A_list_n += rows  + [zero_row, zero]    # fourth row
+
     
     # Solve the system
     A_ = PETScNestMatrix(A_list_n) # recombine blocks now with Lagrange multipliers
@@ -62,10 +72,25 @@ def mixed_dim_fenics_solve_custom(a, L, W, mesh, jump_vecs, G):
     rhs_blocks_n = rhs_blocks + [zero_PETScVec(1)]*num_bifs
     A_.init_vectors(b_, rhs_blocks_n)
     A_.convert_to_aij() # Convert MATNEST to AIJ for LU solver
+    
+    elapsed = time.time()-t_
+    info = f'* Set up PETSc: {elapsed:1.3f}s' 
+    with open("profiling.txt",'a') as file:
+        file.write(info + '\n')
+    print(info)
+    t_ = time.time()
+    
 
     sol_ = Vector(mesh.mpi_comm(), sum([P2.dim() for P2 in W.sub_spaces()]) + num_bifs)
     solver = PETScLUSolver()
     solver.solve(A_, sol_, b_)
+
+    elapsed = time.time()-t_
+    info = f'* Solving: {elapsed:1.3f}s' 
+    with open("profiling.txt",'a') as file:
+        file.write(info + '\n')
+    print(info)
+    t_ = time.time()
 
     # Transform sol_ into qp0 and update qp_
     dim_shift = 0
@@ -78,10 +103,20 @@ def mixed_dim_fenics_solve_custom(a, L, W, mesh, jump_vecs, G):
 
 
 def mixed_dim_fenics_solve(a, L, W, mesh):
-        
+    
+    import time
+    t_ = time.time()
+    
     # Assemble the system
     qp0 = Function(W)
     system = assemble_mixed_system(a == L, qp0)
+    
+    elapsed = time.time()-t_
+    info = f'* Assemble mixed system: {elapsed:1.3f}s'
+    with open("profiling.txt",'a') as file:
+        file.write(info + '\n')
+    print(info)
+    t_ = time.time()
     
     A_list = system[0]
     rhs_blocks = system[1]
@@ -94,7 +129,23 @@ def mixed_dim_fenics_solve(a, L, W, mesh):
 
     sol_ = Vector(mesh.mpi_comm(), sum([P2.dim() for P2 in W.sub_spaces()]))
     solver = PETScLUSolver()
+    
+    elapsed = time.time()-t_
+    info = f'* Setting up PETSc: {elapsed:1.3f}'
+    with open("profiling.txt",'a') as file:
+        file.write(info + '\n')
+    print(info)
+    t_ = time.time()
+    
+    
     solver.solve(A_, sol_, b_)
+    elapsed = time.time()-t_
+    info = f'* Solving: {elapsed:1.3f}s'
+    with open("profiling.txt",'a') as file:
+        file.write(info + '\n')
+    print(info)
+    t_ = time.time()
+    
 
     # Transform sol_ into qp0 and update qp_
     dim_shift = 0

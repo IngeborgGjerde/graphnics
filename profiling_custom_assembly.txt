@@ -1,0 +1,20 @@
+Profiling for hydraulic network model with custom assembly of reals
+ Number of bifurcations: 3 
+
+ With cache cleared: 
+* Setting up spaces: 1.047s
+* Adding jump terms to varform: 5.643s
+* Adding edge terms to varform: 0.005s
+* Assemble mixed system: 7.979s
+* Set up PETSc: 0.005s
+* Solving: 0.001s
+Total solver time: 15.800s
+ 
+ Without cache cleared: 
+* Setting up spaces: 0.004s
+* Adding jump terms to varform: 0.014s
+* Adding edge terms to varform: 0.005s
+* Assemble mixed system: 0.035s
+* Set up PETSc: 0.004s
+* Solving: 0.000s
+Total solver time: 0.067s

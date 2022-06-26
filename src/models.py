@@ -5,7 +5,7 @@ from utils import *
 from graph_examples import *
     
 
-
+@timeit
 def hydraulic_network(G, f=Constant(0), p_bc=Constant(0)):
     '''
     Solve hydraulic network model 
@@ -18,8 +18,6 @@ def hydraulic_network(G, f=Constant(0), p_bc=Constant(0)):
         f (df.function): source term
         p_bc (df.function): neumann bc for pressure
     '''
-    import time    
-    t_ = time.time()
     
     
     mesh = G.global_mesh
@@ -52,22 +50,13 @@ def hydraulic_network(G, f=Constant(0), p_bc=Constant(0)):
     xis = vphi[G.num_edges:-1]
     phi = vphi[-1]
 
-    elapsed = time.time()-t_
-    info = f'* Setting up spaces: {elapsed:1.3f}s' 
-    with open("profiling.txt",'a') as file:
-        file.write(info + '\n')
-    print(info)
-    t_ = time.time()
     
     ## Assemble variational formulation 
 
-    # Initialize blocks in a and L to zero
-    # (so fenics-mixed-dim does not throw an error)
+    # Initialize a and L to be zero
     dx = Measure('dx', domain=mesh)
     a = Constant(0)*p*phi*dx
-    #for ix in range(0, len(G.bifurcation_ixs)):
-    #    a += Constant(0)*lams[ix]*xis[ix]*dx
-    L = Constant(0)*phi*dx
+    L = f*phi*dx
 
     # Assemble edge contributions to a and L
     for i, e in enumerate(G.edges):
@@ -88,24 +77,10 @@ def hydraulic_network(G, f=Constant(0), p_bc=Constant(0)):
         L += p_bc*vs[i]*ds_edge(BOUN_IN)
         L -= p_bc*vs[i]*ds_edge(BOUN_OUT)
 
-    elapsed = time.time()-t_
-    info = f'* Adding edge terms to varform: {elapsed:1.3f}s'
-    with open("profiling.txt",'a') as file:
-        file.write(info + '\n')
-    print(info)
-    t_ = time.time()
-
     # Assemble vertex contribution to a, i.e. the bifurcation condition
     for i, b in enumerate(G.bifurcation_ixs):
         a += G.ip_jump_lm(qs, xis[i], b) + G.ip_jump_lm(vs, lams[i], b)
     
-    
-    elapsed = time.time()-t_
-    info = f'* Adding jump terms to varform: {elapsed:1.3f}s'
-    with open("profiling.txt",'a') as file:
-        file.write(info + '\n')
-    print(info)
-    t_ = time.time()
     
     # Solve
     qp0 = mixed_dim_fenics_solve(a, L, W, mesh)
@@ -224,12 +199,11 @@ def network_stokes(G, fluid_params, t_steps, T, q0=None, f=Constant(0), g=Consta
         qp_n1 = mixed_dim_fenics_solve(a, L, W, mesh)
         
         qps.append(qp_n1)
-        #print(norm(qp0.sub(0)))
+        
             
         # Update qp_ 
         for s in range(0, G.num_edges):
             assign(qp_n.sub(s), qp_n1.sub(s))
-            #print(norm(qp_n.sub(0)))
             
 
     return qps
@@ -332,7 +306,8 @@ def test_reduced_stokes():
 
     f, g, q, p, ns = [Expression(sym.printing.ccode(func), degree=2, t=0) for func in [f,g, q, p, ns]]
     
-    for N in [2, 4, 8, 16]:
+    for N in [2, 4, 8]:
+
         G.make_mesh(N)
         qps = network_stokes(G, fluid_params, t_steps=30, T=1, q0=q, f=f, g=g, ns=ns)
 
@@ -354,8 +329,10 @@ def test_reduced_stokes():
         q_l2_error = np.sum([np.linalg.norm(q_diff) for q_diff in q_diffs])
         p_l2_error = np.linalg.norm(p_diff)
 
-        #print(f'{q_l2_error:1.2e}  {p_l2_error:1.2e}')
-    
+        print(f'{q_l2_error:1.2e}  {p_l2_error:1.2e}')
+
+
+
     assert q_l2_error < 0.001, 'Network Stokes pressure solution not correct'
     assert p_l2_error < 0.001, 'Network Stokes flux solution not correct'
 

@@ -1,12 +1,13 @@
-from pyexpat import model
 import networkx as nx
 from fenics import *
 from fenics_graph import *
 from utils import *
 from graph_examples import *
+from utils import timeit
     
 parameters["form_compiler"]["cpp_optimize"] = True
 
+@timeit
 def hydraulic_network_with_custom_assembly(G, f=Constant(0), p_bc=Constant(0)):
     '''
     Solve hydraulic network model 
@@ -20,8 +21,6 @@ def hydraulic_network_with_custom_assembly(G, f=Constant(0), p_bc=Constant(0)):
         f (df.function): source term
         p_bc (df.function): neumann bc for pressure
     '''
-    import time    
-    t_ = time.time()
     
     mesh = G.global_mesh
 
@@ -48,13 +47,6 @@ def hydraulic_network_with_custom_assembly(G, f=Constant(0), p_bc=Constant(0)):
     vs = vphi[0:G.num_edges]
     phi = vphi[-1]
     
-    elapsed = time.time()-t_
-    info = f'* Setting up spaces: {elapsed:1.3f}s' 
-    with open("profiling.txt",'a') as file:
-        file.write(info + '\n')
-    print(info)
-    t_ = time.time()
-
     ## Assemble variational formulation 
 
     # Initialize blocks in a and L to zero
@@ -68,12 +60,6 @@ def hydraulic_network_with_custom_assembly(G, f=Constant(0), p_bc=Constant(0)):
     # and input the jumps in the matrix later
     vecs = [[G.jump_vector(q, ix, j) for j in G.bifurcation_ixs] for ix, q in enumerate(qs)] 
     # now we can index by vecs[branch_ix][bif_ix]
-    elapsed = time.time()-t_
-    info = f'* Adding jump terms to varform: {elapsed:1.3f}s' 
-    with open("profiling.txt",'a') as file:
-        file.write(info + '\n')
-    print(info)
-    t_ = time.time()
     
     # Assemble edge contributions to a and L
     for i, e in enumerate(G.edges):
@@ -94,20 +80,12 @@ def hydraulic_network_with_custom_assembly(G, f=Constant(0), p_bc=Constant(0)):
         L += p_bc*vs[i]*ds_edge(BOUN_IN)
         L -= p_bc*vs[i]*ds_edge(BOUN_OUT)
     
-    elapsed = time.time()-t_
-    info = f'* Adding edge terms to varform: {elapsed:1.3f}s' 
-    with open("profiling.txt",'a') as file:
-        file.write(info + '\n')
-    print(info)
-    t_ = time.time()
-    
     # Solve
     qp0 = mixed_dim_fenics_solve_custom(a, L, W, mesh, vecs, G)
     return qp0
 
 
 import argparse
-import time
 import os
 from models import hydraulic_network
 
@@ -131,48 +109,27 @@ if __name__ == '__main__':
     
     
     # Clear fenics cache
+    print('Clearing cache')
     os.system('dijitso clean') 
     
     # Profile against a simple line graph with n nodes    
-    n = 10
+    n = 3
     G = make_line_graph(n)
     G.make_mesh(1) # we use just one cell per edge 
     mesh = G.global_mesh
     num_bifs = len(G.bifurcation_ixs)
 
-    with open("profiling.txt",'w') as file:
-        file.write('Profiling for hydraulic network model')
-        if args.customassembly:
-             file.write(' with custom assembly of reals')
-        file.write(f'\n Number of bifurcations: {num_bifs} \n')
-        file.write('\n With cache cleared: \n')
-
-
     # Run with cache cleared and record times
-    t = time.time()
     
     p_bc = Expression('x[0]', degree=1)
-    qp0 = modelfunc(G, p_bc = p_bc)
-    elapsed = time.time()-t
     
-    info = f'Total solver time: {elapsed:1.3f}s'
-    with open("profiling.txt",'a') as file:
-        file.write(info)
+    qp0 = modelfunc(G, p_bc = p_bc)
     
     
     # Run again without clearing cache
-    with open("profiling.txt",'a') as file:
-        file.write('\n \n Without cache cleared: \n')
-    t = time.time()
+    print('\n \n Running again with cache')
+    
     qp0 = modelfunc(G, p_bc = p_bc)
-    elapsed = time.time()-t
-    
-    info = f'Total solver time: {elapsed:1.3f}s'
-    with open("profiling.txt",'a') as file:
-        file.write(info)
-    
-            
-    list_timings(TimingClear.keep, [TimingType.wall])
         
     vars = qp0.split()
     p = vars[-1]

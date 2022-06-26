@@ -1,7 +1,15 @@
-from lib2to3.pytree import convert
 from fenics import *
 import scipy.sparse as sp
 from petsc4py import PETSc
+
+
+from time import time
+from functools import wraps
+
+
+@timeit
+def call_assemble_mixed_system(a, L, qp0):
+    return assemble_mixed_system(a==L, qp0)
 
 
 def mixed_dim_fenics_solve_custom(a, L, W, mesh, jump_vecs, G):
@@ -9,15 +17,7 @@ def mixed_dim_fenics_solve_custom(a, L, W, mesh, jump_vecs, G):
     # Assemble the system
     qp0 = Function(W)
     
-    import time
-    t_ = time.time()
-    system = assemble_mixed_system(a == L, qp0)
-    elapsed = time.time()-t_
-    info = f'* Assemble mixed system: {elapsed:1.3f}s' 
-    with open("profiling.txt",'a') as file:
-        file.write(info + '\n')
-    print(info)
-    t_ = time.time()
+    system = call_assemble_mixed_system(a, L, qp0)
     
     A_list = system[0]
     rhs_blocks = system[1]
@@ -59,12 +59,7 @@ def mixed_dim_fenics_solve_custom(a, L, W, mesh, jump_vecs, G):
             A_list_n += [jump_vecs[j][i]]  # copy in the jump vectors
         A_list_n += [zero_row] # no jump in pressure so we add a single zero row
         A_list_n += [zero]*num_bifs # last block corresponds to (lam, xi)
-           
-    #A_list_n += A_list[0:3] + [rows_T[0]]  # first row
-    #A_list_n += A_list[3:6] + [rows_T[1]]  # second row
-    #A_list_n += A_list[6:9] + [zero_col]     # third row  
-    #A_list_n += rows  + [zero_row, zero]    # fourth row
-
+    
     
     # Solve the system
     A_ = PETScNestMatrix(A_list_n) # recombine blocks now with Lagrange multipliers
@@ -72,25 +67,10 @@ def mixed_dim_fenics_solve_custom(a, L, W, mesh, jump_vecs, G):
     rhs_blocks_n = rhs_blocks + [zero_PETScVec(1)]*num_bifs
     A_.init_vectors(b_, rhs_blocks_n)
     A_.convert_to_aij() # Convert MATNEST to AIJ for LU solver
-    
-    elapsed = time.time()-t_
-    info = f'* Set up PETSc: {elapsed:1.3f}s' 
-    with open("profiling.txt",'a') as file:
-        file.write(info + '\n')
-    print(info)
-    t_ = time.time()
-    
-
+   
     sol_ = Vector(mesh.mpi_comm(), sum([P2.dim() for P2 in W.sub_spaces()]) + num_bifs)
     solver = PETScLUSolver()
     solver.solve(A_, sol_, b_)
-
-    elapsed = time.time()-t_
-    info = f'* Solving: {elapsed:1.3f}s' 
-    with open("profiling.txt",'a') as file:
-        file.write(info + '\n')
-    print(info)
-    t_ = time.time()
 
     # Transform sol_ into qp0 and update qp_
     dim_shift = 0
@@ -101,22 +81,11 @@ def mixed_dim_fenics_solve_custom(a, L, W, mesh, jump_vecs, G):
     return qp0
 
 
-
 def mixed_dim_fenics_solve(a, L, W, mesh):
-    
-    import time
-    t_ = time.time()
     
     # Assemble the system
     qp0 = Function(W)
-    system = assemble_mixed_system(a == L, qp0)
-    
-    elapsed = time.time()-t_
-    info = f'* Assemble mixed system: {elapsed:1.3f}s'
-    with open("profiling.txt",'a') as file:
-        file.write(info + '\n')
-    print(info)
-    t_ = time.time()
+    system = call_assemble_mixed_system(a == L, qp0)
     
     A_list = system[0]
     rhs_blocks = system[1]
@@ -130,21 +99,7 @@ def mixed_dim_fenics_solve(a, L, W, mesh):
     sol_ = Vector(mesh.mpi_comm(), sum([P2.dim() for P2 in W.sub_spaces()]))
     solver = PETScLUSolver()
     
-    elapsed = time.time()-t_
-    info = f'* Setting up PETSc: {elapsed:1.3f}'
-    with open("profiling.txt",'a') as file:
-        file.write(info + '\n')
-    print(info)
-    t_ = time.time()
-    
-    
     solver.solve(A_, sol_, b_)
-    elapsed = time.time()-t_
-    info = f'* Solving: {elapsed:1.3f}s'
-    with open("profiling.txt",'a') as file:
-        file.write(info + '\n')
-    print(info)
-    t_ = time.time()
     
 
     # Transform sol_ into qp0 and update qp_
@@ -178,6 +133,7 @@ def convert_vec_to_petscmatrix(vec):
     
     return PETScMatrix(petsc_mat)
 
+
 def zero_PETScVec(n):
     '''
     Make PETScVec with n zeros 
@@ -199,22 +155,6 @@ def zero_PETScMat(n,m):
     return PETScMatrix(petsc_mat)
 
 
-def assemble_global_flux(qs, G):
-    [q.set_allow_extrapolation(True) for q in qs]
-
-    #global_DG2 = FunctionSpace(G.global_mesh, 'DG', 2)
-    #q_e = [interpolate(q, global_DG2) for q in qs]
-    #q_global = 0
-    #for i in range(0,len(q_e)):
-    #    q_global += q_e[i]*CharacteristicFunction(G,i)
-
-    #q_global = project(q_global)
-    #return q_global
-    pass
-
-
-
-
 class CharacteristicFunction(UserExpression):
     '''
     Characteristic function on edge i
@@ -234,3 +174,21 @@ class CharacteristicFunction(UserExpression):
         values[0] = (edge==self.edge)
     
     
+
+def timeit(func):
+    """
+    Prints and saves to 'profiling.txt' the execution time of func
+    Args:
+        func: function to time
+    """
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time()
+        result = func(*args, **kwargs)
+        end = time()
+        time_info = f'{func.__name__} executed in {end - start:.3f} seconds'
+        print(time_info)
+        return result
+
+    return wrapper

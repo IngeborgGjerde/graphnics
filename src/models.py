@@ -269,12 +269,6 @@ def test_reduced_stokes():
 
     '''
 
-    G = make_line_graph(3)
-    G.make_mesh(4)
-
-    G.neumann_inlets = [0]
-    G.neumann_outlets = [1]
-
     fluid_params = {'rho':1, 'nu':1}
     rho = fluid_params['rho']
     mu = rho*fluid_params['nu']
@@ -282,11 +276,6 @@ def test_reduced_stokes():
     res = 0.1
     Ainv = 2
 
-    for e in G.edges():
-        G.edges[e]['res']=res
-        G.edges[e]['Ainv']=Ainv
-
-    
     # We make the global q and global p smooth, so that the normal stress is continuous
     import sympy as sym
     x, t = sym.symbols('x[0] t')
@@ -306,9 +295,24 @@ def test_reduced_stokes():
 
     f, g, q, p, ns = [Expression(sym.printing.ccode(func), degree=2, t=0) for func in [f,g, q, p, ns]]
     
-    for N in [2, 4, 8]:
+    
+    print('****************************************************************')
+    print('        Explicit computations         Via errornorm             ')
+    print('h       ||q_e||_L2  ||p_e||_L2  |    ||q_e||_L2     ||p_e||_L2'  )
+    print('****************************************************************')
+    for N in [2, 3, 4, 5, 6]:
 
+        G = make_line_graph(3)
         G.make_mesh(N)
+
+        G.neumann_inlets = [0]
+        G.neumann_outlets = [1]
+        
+        for e in G.edges():
+            G.edges[e]['res']=res
+            G.edges[e]['Ainv']=Ainv
+
+
         qps = network_stokes(G, fluid_params, t_steps=30, T=1, q0=q, f=f, g=g, ns=ns)
 
         p.t = 0.1
@@ -322,20 +326,25 @@ def test_reduced_stokes():
         qas = [interpolate(q, qh.function_space()) for qh in qhs]
         
         # The fenics-mixed-dim errornorm is a bit buggy
-        # so we compute the errors manually
+        # so we compute the errors manually and compare
         q_diffs = [(qas[i].vector().get_local()-qhs[i].vector().get_local())*G.global_mesh.hmin() for i in range(0,G.num_edges)]
         p_diff = (pa.vector().get_local()-ph.vector().get_local())*G.global_mesh.hmin()
         
         q_l2_error = np.sum([np.linalg.norm(q_diff) for q_diff in q_diffs])
         p_l2_error = np.linalg.norm(p_diff)
 
-        print(f'{q_l2_error:1.2e}  {p_l2_error:1.2e}')
+        q_error = np.sum([errornorm(qh, qa) for qh, qa in zip(qhs, qas)]) 
+        pa2 = interpolate(p, FunctionSpace(G.global_mesh, 'CG', 3))
+        p_error = errornorm(ph, pa2)
+        
+        print(f'{G.global_mesh.hmin():1.3f}   {q_l2_error:1.2e}     {p_l2_error:1.2e}     |    {q_error:1.2e}     {p_error:1.2e}')
+        
+        print(f'')
 
 
-
-    assert q_l2_error < 0.001, 'Network Stokes pressure solution not correct'
-    assert p_l2_error < 0.001, 'Network Stokes flux solution not correct'
+    assert q_l2_error < 0.01, 'Network Stokes pressure solution not correct'
+    assert p_l2_error < 0.01, 'Network Stokes flux solution not correct'
 
 if __name__ == '__main__':
-    test_mass_conservation()
+    #test_mass_conservation()
     test_reduced_stokes()

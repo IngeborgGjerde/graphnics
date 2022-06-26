@@ -9,7 +9,7 @@ We use the mixed-dimensional branch of FEniCS combined with networkx. The enviro
 git clone https://github.com/IngeborgGjerde/fenics-networks/
 cd fenics-networks
 docker build --no-cache -t fenics-networks .
-docker run --name networkfenics -v $(pwd):/home/fenics/shared -d -p 127.0.0.1:8888:8888 networkfenics 'jupyter-notebook --ip=0.0.0.0'
+docker run --name networkfenics -v $(pwd):/home/fenics/shared -d -p 127.0.0.1:8888:8888 fenics-networks 'jupyter-notebook --ip=0.0.0.0'
 ```
 
 You can then enter the container by running 

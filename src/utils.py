@@ -7,7 +7,26 @@ from time import time
 from functools import wraps
 
 
-@timeit
+def timeit(func):
+    """
+    Prints and saves to 'profiling.txt' the execution time of func
+    Args:
+        func: function to time
+    """
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time()
+        result = func(*args, **kwargs)
+        end = time()
+        time_info = f'{func.__name__} executed in {end - start:.3f} seconds'
+        print(time_info)
+        return result
+
+    return wrapper
+
+
+#@timeit
 def call_assemble_mixed_system(a, L, qp0):
     return assemble_mixed_system(a==L, qp0)
 
@@ -85,7 +104,7 @@ def mixed_dim_fenics_solve(a, L, W, mesh):
     
     # Assemble the system
     qp0 = Function(W)
-    system = call_assemble_mixed_system(a == L, qp0)
+    system = call_assemble_mixed_system(a, L, qp0)
     
     A_list = system[0]
     rhs_blocks = system[1]
@@ -175,20 +194,3 @@ class CharacteristicFunction(UserExpression):
     
     
 
-def timeit(func):
-    """
-    Prints and saves to 'profiling.txt' the execution time of func
-    Args:
-        func: function to time
-    """
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        start = time()
-        result = func(*args, **kwargs)
-        end = time()
-        time_info = f'{func.__name__} executed in {end - start:.3f} seconds'
-        print(time_info)
-        return result
-
-    return wrapper

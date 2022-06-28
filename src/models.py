@@ -63,13 +63,13 @@ def hydraulic_network(G, f=Constant(0), p_bc=Constant(0)):
         
         msh = G.edges[e]['submesh']
         vf = G.edges[e]['vf']
-        #res = G.edges[e]['res']
+        res = G.edges[e]['res']
         
         dx_edge = Measure("dx", domain = msh)
         ds_edge = Measure('ds', domain=msh, subdomain_data=vf)
 
         # Add variational terms defined on edge
-        a += qs[i]*vs[i]*dx_edge        
+        a += res*qs[i]*vs[i]*dx_edge        
         a -= p*G.dds(vs[i])*dx_edge
         a += phi*G.dds(qs[i])*dx_edge
 
@@ -190,7 +190,7 @@ def network_stokes(G, fluid_params, t_steps, T, q0=None, f=Constant(0), g=Consta
     
     qps = []
     for t in np.linspace(0, T, t_steps):
-       
+        
         # Solve
         f.t = t
         g.t = t
@@ -198,8 +198,7 @@ def network_stokes(G, fluid_params, t_steps, T, q0=None, f=Constant(0), g=Consta
 
         qp_n1 = mixed_dim_fenics_solve(a, L, W, mesh)
         
-        qps.append(qp_n1)
-        
+        qps.append(qp_n1) 
             
         # Update qp_ 
         for s in range(0, G.num_edges):
@@ -262,7 +261,6 @@ def test_mass_conservation():
             assert near(flux_in, flux_out, 1e-3), f'Mass is not conserved at bifurcation {b}'
 
 
-
 def test_reduced_stokes():
     ''''
     Test approximation of reduced stokes against analytic solution
@@ -300,9 +298,84 @@ def test_reduced_stokes():
     print('        Explicit computations         Via errornorm             ')
     print('h       ||q_e||_L2  ||p_e||_L2  |    ||q_e||_L2     ||p_e||_L2'  )
     print('****************************************************************')
+    
+    G = make_line_graph(4)
+    G.make_mesh(8)
+
+    G.neumann_inlets = [0]
+    G.neumann_outlets = [1]
+    
+    for e in G.edges():
+        G.edges[e]['res']=res
+        G.edges[e]['Ainv']=Ainv
+
+
+    qps = network_stokes(G, fluid_params, t_steps=30, T=1, q0=q, f=f, g=g, ns=ns)
+
+    vars = qps[0].split(deepcopy=True)
+    qhs = vars[0:G.num_edges]
+    ph = vars[-1]
+
+    pa = interpolate(p, ph.function_space())
+    qas = [interpolate(q, qh.function_space()) for qh in qhs]
+    
+    # The fenics-mixed-dim errornorm is a bit buggy
+    # so we compute the errors manually and compare
+    q_diffs = [(qas[i].vector().get_local()-qhs[i].vector().get_local())*G.global_mesh.hmin() for i in range(0,G.num_edges)]
+    p_diff = (pa.vector().get_local()-ph.vector().get_local())*G.global_mesh.hmin()
+    
+    q_l2_error = np.sum([np.linalg.norm(q_diff) for q_diff in q_diffs])
+    p_l2_error = np.linalg.norm(p_diff)
+
+    #q_error = np.sum([errornorm(qh, qa) for qh, qa in zip(qhs, qas)]) 
+    #pa2 = interpolate(p, FunctionSpace(G.global_mesh, 'CG', 3))
+    #p_error = errornorm(ph, pa2)
+
+    assert q_l2_error < 0.001, 'Network Stokes pressure solution not correct'
+    assert p_l2_error < 0.001, 'Network Stokes flux solution not correct'
+
+
+
+def convergence_test_stokes():
+    ''''
+    Test approximation of reduced stokes against analytic solution
+
+    '''
+
+    fluid_params = {'rho':1, 'nu':1}
+    rho = fluid_params['rho']
+    mu = rho*fluid_params['nu']
+
+    res = 1
+    Ainv = 1
+
+    # We make the global q and global p smooth, so that the normal stress is continuous
+    import sympy as sym
+    x, t = sym.symbols('x[0] t')
+    q = sym.sin(x) + sym.sin(t)
+    p = sym.cos(x) + sym.cos(t)
+
+    # Force source
+    g = rho*Ainv*q.diff(t) + mu*Ainv*res*q
+    g += - mu*Ainv*sym.diff(sym.diff(q,x),x) + p.diff(x)
+
+
+    # Fluid source
+    f = q.diff(x)
+
+    # Normal stress
+    ns = mu*Ainv*q.diff(x)-p 
+
+    f, g, q, p, ns = [Expression(sym.printing.ccode(func), degree=2, t=0) for func in [f,g, q, p, ns]]
+    
+    
+    print('****************************************************************')
+    print('        Explicit computations         Via errornorm             ')
+    print('h       ||q_e||_L2  ||p_e||_L2  |    ||q_e||_L2     ||p_e||_L2'  )
+    print('****************************************************************')
     for N in [2, 3, 4, 5, 6]:
 
-        G = make_line_graph(3)
+        G = make_line_graph(2)
         G.make_mesh(N)
 
         G.neumann_inlets = [0]
@@ -312,26 +385,29 @@ def test_reduced_stokes():
             G.edges[e]['res']=res
             G.edges[e]['Ainv']=Ainv
 
-
+        q.t = 0
         qps = network_stokes(G, fluid_params, t_steps=30, T=1, q0=q, f=f, g=g, ns=ns)
 
-        p.t = 0.1
-        q.t = 0.1
+        p.t = 1
+        q.t = 1
 
-        vars = qps[0].split(deepcopy=True)
+        vars = qps[-1].split(deepcopy=True)
         qhs = vars[0:G.num_edges]
         ph = vars[-1]
 
-        pa = interpolate(p, ph.function_space())
         qas = [interpolate(q, qh.function_space()) for qh in qhs]
         
         # The fenics-mixed-dim errornorm is a bit buggy
         # so we compute the errors manually and compare
         q_diffs = [(qas[i].vector().get_local()-qhs[i].vector().get_local())*G.global_mesh.hmin() for i in range(0,G.num_edges)]
-        p_diff = (pa.vector().get_local()-ph.vector().get_local())*G.global_mesh.hmin()
         
-        q_l2_error = np.sum([np.linalg.norm(q_diff) for q_diff in q_diffs])
-        p_l2_error = np.linalg.norm(p_diff)
+        ph = interpolate(ph, FunctionSpace(G.global_mesh, 'CG', 3))
+        pa = interpolate(p, FunctionSpace(G.global_mesh, 'CG', 3))
+        p_diff = (pa.vector().get_local()-ph.vector().get_local())**2
+        
+        
+        q_l2_error = np.sum([np.linalg.norm(q_diff) for q_diff in q_diffs])*G.global_mesh.hmin()
+        p_l2_error = np.sum(p_diff)**0.5*G.global_mesh.hmin()
 
         q_error = np.sum([errornorm(qh, qa) for qh, qa in zip(qhs, qas)]) 
         pa2 = interpolate(p, FunctionSpace(G.global_mesh, 'CG', 3))
@@ -339,12 +415,29 @@ def test_reduced_stokes():
         
         print(f'{G.global_mesh.hmin():1.3f}   {q_l2_error:1.2e}     {p_l2_error:1.2e}     |    {q_error:1.2e}     {p_error:1.2e}')
         
+        
+        
+        import matplotlib.pyplot as plt
+        plt.figure()
+        plt.plot(qas[0].function_space().tabulate_dof_coordinates()[:,0], qas[0].vector().get_local(), '.', label='a')
+        plt.plot(qhs[0].function_space().tabulate_dof_coordinates()[:,0], qhs[0].vector().get_local(), '.', label='h')
+        plt.legend()
+        plt.title('q')
+        plt.savefig('sol-q.png')
+
+        plt.figure()
+        plt.title('p')
+        plt.plot(pa.function_space().tabulate_dof_coordinates()[:,0], pa.vector().get_local(), '', label='a')
+        plt.plot(ph.function_space().tabulate_dof_coordinates()[:,0], ph.vector().get_local(), '.', label='h')
+        plt.legend()
+        plt.savefig('sol-p.png')
+
+        
         print(f'')
 
 
-    assert q_l2_error < 0.01, 'Network Stokes pressure solution not correct'
-    assert p_l2_error < 0.01, 'Network Stokes flux solution not correct'
 
 if __name__ == '__main__':
     #test_mass_conservation()
-    test_reduced_stokes()
+    #test_reduced_stokes()
+    convergence_test_stokes()

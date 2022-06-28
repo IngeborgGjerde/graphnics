@@ -1,4 +1,4 @@
-FROM ceciledc/fenics_mixed_dimensional:latest
+FROM ceciledc/fenics_mixed_dimensional:21-06-22
 USER root
 RUN apt-get -qq update && \
     apt-get -y upgrade && \

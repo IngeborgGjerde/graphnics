@@ -105,7 +105,8 @@ def network_stokes(G, fluid_params, t_steps, T, q0=None, f=Constant(0), g=Consta
         g (df.function): force source term
         ns (df.function): normal stress for neumann bcs
     '''
-
+    cn1 = 0.5
+    cn2 = 0.5
 
     mesh = G.global_mesh
     rho = Constant(fluid_params['rho'])
@@ -189,7 +190,10 @@ def network_stokes(G, fluid_params, t_steps, T, q0=None, f=Constant(0), g=Consta
         a += G.ip_jump_lm(qs, xis[i], b) + G.ip_jump_lm(vs, lams[i], b)
     
     qps = []
-    for t in np.linspace(0, T, t_steps):
+    
+    dt_val = dt(0)
+    
+    for t in np.linspace(dt_val, T, t_steps-1):
         
         # Solve
         f.t = t
@@ -351,31 +355,37 @@ def convergence_test_stokes():
 
     # We make the global q and global p smooth, so that the normal stress is continuous
     import sympy as sym
-    x, t = sym.symbols('x[0] t')
-    q = sym.sin(x) + sym.sin(t)
-    p = sym.cos(x) + sym.cos(t)
-
-    # Force source
-    g = rho*Ainv*q.diff(t) + mu*Ainv*res*q
-    g += - mu*Ainv*sym.diff(sym.diff(q,x),x) + p.diff(x)
-
-
-    # Fluid source
+    x, t, x_ = sym.symbols('x[0] t x_')
+    
+    q = sym.cos(6.28*x)
     f = q.diff(x)
+    
+    dsp = +sym.diff(sym.diff(q, x), x) - q - sym.diff(q, t)
+    p_ = sym.integrate(dsp, (x, 0, x_))
+    p = p_.subs(x_, x)
+    
+    # Force source
+    g = 0
 
+    print('Analytic solutions')
+    print('q', sym.printing.latex(q))
+    print('p', sym.printing.latex(p))
+    print('f', sym.printing.latex(f))
+    
     # Normal stress
     ns = mu*Ainv*q.diff(x)-p 
 
     f, g, q, p, ns = [Expression(sym.printing.ccode(func), degree=2, t=0) for func in [f,g, q, p, ns]]
     
     
-    print('****************************************************************')
-    print('        Explicit computations         Via errornorm             ')
-    print('h       ||q_e||_L2  ||p_e||_L2  |    ||q_e||_L2     ||p_e||_L2'  )
-    print('****************************************************************')
-    for N in [2, 3, 4, 5, 6]:
+    print('*********************************')
+    print('        Explicit computations    ')
+    print('h       ||q_e||_L2  ||p_e||_L2   ')
+    print('*********************************')
+    for N in [0, 1, 2, 3, 4, 5]:
 
-        G = make_line_graph(2)
+        G = make_line_graph(4)
+
         G.make_mesh(N)
 
         G.neumann_inlets = [0]
@@ -386,52 +396,34 @@ def convergence_test_stokes():
             G.edges[e]['Ainv']=Ainv
 
         q.t = 0
-        qps = network_stokes(G, fluid_params, t_steps=30, T=1, q0=q, f=f, g=g, ns=ns)
-
-        p.t = 1
-        q.t = 1
+        t_steps = 2
+        qps = network_stokes(G, fluid_params, t_steps=t_steps, T=1, q0=q, f=f, g=g, ns=ns)
 
         vars = qps[-1].split(deepcopy=True)
         qhs = vars[0:G.num_edges]
         ph = vars[-1]
 
-        qas = [interpolate(q, qh.function_space()) for qh in qhs]
-        
-        # The fenics-mixed-dim errornorm is a bit buggy
-        # so we compute the errors manually and compare
-        q_diffs = [(qas[i].vector().get_local()-qhs[i].vector().get_local())*G.global_mesh.hmin() for i in range(0,G.num_edges)]
-        
-        ph = interpolate(ph, FunctionSpace(G.global_mesh, 'CG', 3))
-        pa = interpolate(p, FunctionSpace(G.global_mesh, 'CG', 3))
-        p_diff = (pa.vector().get_local()-ph.vector().get_local())**2
-        
-        
-        q_l2_error = np.sum([np.linalg.norm(q_diff) for q_diff in q_diffs])*G.global_mesh.hmin()
-        p_l2_error = np.sum(p_diff)**0.5*G.global_mesh.hmin()
-
-        q_error = np.sum([errornorm(qh, qa) for qh, qa in zip(qhs, qas)]) 
         pa2 = interpolate(p, FunctionSpace(G.global_mesh, 'CG', 3))
         p_error = errornorm(ph, pa2)
-        
-        print(f'{G.global_mesh.hmin():1.3f}   {q_l2_error:1.2e}     {p_l2_error:1.2e}     |    {q_error:1.2e}     {p_error:1.2e}')
-        
-        
+        q_error = 0
+        for i, e in enumerate(G.edges()):
+            qa = interpolate(q, FunctionSpace(G.edges[e]["submesh"], 'CG', 4))
+            q_error += errornorm(qhs[i], qa)
+            
+        print(f'{G.global_mesh.hmin():1.3f}  &  {q_error:1.2e}  &   {p_error:1.2e}')
         
         import matplotlib.pyplot as plt
         plt.figure()
-        plt.plot(qas[0].function_space().tabulate_dof_coordinates()[:,0], qas[0].vector().get_local(), '.', label='a')
-        plt.plot(qhs[0].function_space().tabulate_dof_coordinates()[:,0], qhs[0].vector().get_local(), '.', label='h')
-        plt.legend()
-        plt.title('q')
-        plt.savefig('sol-q.png')
-
-        plt.figure()
-        plt.title('p')
-        plt.plot(pa.function_space().tabulate_dof_coordinates()[:,0], pa.vector().get_local(), '', label='a')
         plt.plot(ph.function_space().tabulate_dof_coordinates()[:,0], ph.vector().get_local(), '.', label='h')
+        plt.plot(pa2.function_space().tabulate_dof_coordinates()[:,0], pa2.vector().get_local(), '.', label='a')
         plt.legend()
         plt.savefig('sol-p.png')
-
+        
+        plt.figure()
+        plt.plot(qhs[0].function_space().tabulate_dof_coordinates()[:,0], qhs[0].vector().get_local(), '.', label='h')
+        plt.plot(qa.function_space().tabulate_dof_coordinates()[:,0], qa.vector().get_local(), '.', label='a')
+        plt.legend()
+        plt.savefig('sol-q.png')
         
         print(f'')
 

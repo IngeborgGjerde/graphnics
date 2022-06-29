@@ -8,10 +8,10 @@ def make_line_graph(n):
     '''
 
     G = FenicsGraph()
-    dx = 1/n
+    dx = 1/(n-1)
     G.add_nodes_from(range(0,n))
     for i in range(0,n):
-        G.nodes[i]['pos']=[i*dx,0,0]
+        G.nodes[i]['pos']=[i*dx,0]
     
     for i in range(0,n-1):
         G.add_edge(i,i+1)

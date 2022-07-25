@@ -3,7 +3,7 @@ import numpy as np
 from fenics import *
 
 '''
-The FenicsGraph class constructs fenics meshes from networkx directed graphs.
+The Graphnics class constructs fenics meshes from networkx directed graphs.
 
 TODO: Add possibility for specifying Dirichlet bc nodes
 '''

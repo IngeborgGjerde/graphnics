@@ -190,6 +190,30 @@ class FenicsGraph(nx.DiGraph):
         return dot(grad(f), self.global_tangent)
 
 
+    def jump_vector(self, q, ix, j):
+        '''
+        Returns the signed jump vector for a flux function q on edge ix 
+        over bifurcation j
+        '''
+        
+        edge_list = list(self.edges.keys())
+
+        L = Constant(0)*q*dx
+        
+        for e in self.in_edges(j):
+            ds_edge = Measure('ds', domain=self.edges[e]['submesh'], subdomain_data=self.edges[e]['vf'])
+            edge_ix = edge_list.index(e)
+            if ix==edge_ix: L += q*ds_edge(BIF_IN)
+
+        for e in self.out_edges(j):
+            ds_edge = Measure('ds', domain=self.edges[e]['submesh'], subdomain_data=self.edges[e]['vf'])
+            edge_ix = edge_list.index(e)
+            if ix==edge_ix: L -= q*ds_edge(BIF_OUT)
+
+        b = assemble(L)
+
+        return b
+
     def ip_jump_lm(self, qs, xi, i):
         '''
         Returns the inner product between the jump of edge fluxes [qs]

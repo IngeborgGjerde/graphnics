@@ -80,6 +80,97 @@ def assign_radius_using_Murrays_law(G, start_node,  start_radius):
     return G_
 
 
+
+class DistFromSource(UserExpression):
+    '''
+    Evaluates the distance of a point on a graph to the source node
+    '''
+
+    def __init__(self, G, source_node, **kwargs):
+        '''
+        Args:
+            G (nx.graph): Network graph
+            source_node (int): 
+        '''
+        
+        self.G=G
+        self.source = source_node
+        super().__init__(**kwargs)
+
+        # If the edge lengths are not already computed, do that now
+        if len(nx.get_edge_attributes(G, 'length')) is 0:
+            G.compute_edge_lengths()
+
+        # Get dict of nodes->dist from networkx
+        dist = nx.shortest_path_length(G, 0, weight='length')
+        
+        # Store the distance value at each node as the dof values of a CG 1 function
+        # Then for each point on the graph we get the linear interpolation of the nodal values
+        # of the endpoint, which is exactly the distance at that point
+        
+        mesh = G.make_mesh(store_mesh = False, n=0) # we don't want to overwrite a pre-existing mesh
+        
+        V = FunctionSpace(mesh, 'CG', 1)
+        dist_func = Function(V)
+    
+
+        # The vertices of the mesh are ordered like the nodes of the graph
+        dofmap = list(dof_to_vertex_map(V)) # for going from mesh vertex to dof
+        
+        # Input nodal values in dist_func 
+        for n in G.nodes():
+            dof_ix = dofmap.index(n)
+            dist_func.vector()[dof_ix] = dist[n]
+        
+        # Assign dist_func as a class variable and query it in eval
+        self.dist_func = dist_func
+        
+        
+    def eval(self, values, x):
+        # Query the CG-1 dist_func 
+        values[0] = self.dist_func(x)
+        
+        
+        
+        
+        
+def test_dist_from_source():
+    
+    # Test on simple line graph
+    from graph_examples import make_line_graph
+    G = make_line_graph(10)
+
+    dist_from_source = DistFromSource(G, 0, degree=2)
+    V = FunctionSpace(G.global_mesh, 'CG', 1)
+    dist_from_source_i = interpolate(dist_from_source, V)
+
+    coords = V.tabulate_dof_coordinates()
+    lengths = np.linalg.norm(coords, axis=1)
+
+    discrepancy = np.linalg.norm(np.asarray(dist_from_source_i.vector().get_local()) - np.asarray(lengths))
+    assert near(discrepancy, 0)
+    
+    
+    # Check on a double Y bifurcation
+    from graph_examples import make_double_Y_bifurcation
+    G = make_double_Y_bifurcation()
+
+    dist_from_source = DistFromSource(G, 0, degree=2)
+    
+    source = 0
+    
+    for node in [3, 4, 5]:
+        path = nx.shortest_path(G, source, node)[1:]
+        
+        v1 = source
+        dist = 0
+        for v2 in path:
+            dist += G.edges()[(v1, v2)]["length"]         
+            v1 = v2
+        assert near(dist_from_source(G.nodes()[node]['pos']), dist), f'Distance not computed correctly for node {node}'
+
+
+
 def test_Murrays_law_on_double_bifurcation():
     
     from graph_examples import make_double_Y_bifurcation

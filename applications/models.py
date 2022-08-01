@@ -1,10 +1,10 @@
 import networkx as nx
 from fenics import *
-from fenics_graph import *
-from utils import *
-from graph_examples import *
-    
 
+import sys
+sys.path.append('../')
+from graphnics import *
+    
 @timeit
 def hydraulic_network(G, f=Constant(0), p_bc=Constant(0)):
     '''
@@ -105,9 +105,7 @@ def network_stokes(G, fluid_params, t_steps, T, q0=None, f=Constant(0), g=Consta
         g (df.function): force source term
         ns (df.function): normal stress for neumann bcs
     '''
-    cn1 = 0.5
-    cn2 = 0.5
-
+    
     mesh = G.global_mesh
     rho = Constant(fluid_params['rho'])
     mu=Constant(fluid_params['nu'])*rho
@@ -430,6 +428,6 @@ def convergence_test_stokes():
 
 
 if __name__ == '__main__':
-    #test_mass_conservation()
-    #test_reduced_stokes()
+    test_mass_conservation()
+    test_reduced_stokes()
     convergence_test_stokes()

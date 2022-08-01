@@ -37,11 +37,20 @@ class FenicsGraph(nx.DiGraph):
 
         self.global_mesh = None # global mesh for all the edges in the graph
 
-    def make_mesh(self, n=1): 
+
+    def make_mesh(self, n=1, store_mesh=True): 
         '''
-        Makes a fenics mesh on the graph with n cells on each edge
-        The full mesh is stored in self.global_mesh and a submesh is stored
+        Makes a fenics mesh on the graph with 2^n cells on each edge
+        
+        Args:
+            n (int): number of refinements
+            store (bool): whether to store the mesh as a class variable
+        Returns:
+            mesh (df.mesh): the global mesh
+        
+        If store=True, the full mesh is stored in self.global_mesh and a submesh is stored
         for each edge
+        
         '''
 
 
@@ -81,6 +90,14 @@ class FenicsGraph(nx.DiGraph):
             mesh = refine(mesh)
             mf = adapt(mf, mesh)
 
+        # If the mesh is not supposed to be stored (just returned), we are done
+        # as we only return the global mesh
+        if store_mesh is False:
+            return mesh 
+
+        # If the mesh is supposed to be stored we need to compute the edge meshes
+        # etc
+        
         # Store refined global mesh and refined mesh function marking branches
         self.global_mesh = mesh
         self.mf = mf
@@ -161,6 +178,18 @@ class FenicsGraph(nx.DiGraph):
                 if len(bif_ix_in_submesh)>0:
                     vf.array()[bif_ix_in_submesh[0]]=BOUN_IN 
 
+        return mesh
+
+    
+    def compute_edge_lengths(self):
+        '''
+        Compute and store the length of each edge
+        '''
+        
+        for e in self.edges():
+            v1, v2 = e
+            dist = np.linalg.norm(np.asarray(self.nodes()[v2]['pos'])-np.asarray(self.nodes()[v1]['pos']))
+            self.edges()[e]["length"] = dist
 
 
     def assign_tangents(self):

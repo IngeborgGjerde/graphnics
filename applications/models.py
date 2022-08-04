@@ -1,5 +1,9 @@
+from ast import Expr
 import networkx as nx
 from fenics import *
+
+from xii import *
+        
 
 import sys
 sys.path.append('../')
@@ -88,7 +92,104 @@ def hydraulic_network(G, f=Constant(0), p_bc=Constant(0)):
 
 
 
-def network_stokes(G, fluid_params, t_steps, T, q0=None, f=Constant(0), g=Constant(0), ns = Constant(0)):
+class NetworkStokes():
+    '''
+    Bilinear forms a and L for the network stokes equations
+    
+    Args:
+        G (FenicsGraph): Network domain
+        fluid_params (dict): values for mu and rho
+        '''
+    
+    def __init__(self, G, fluid_params):
+        self.G = G
+        self.fluid_params = fluid_params
+        
+    def a(self, qp, vphi):
+        '''
+        Make bilinear form a 
+        
+        Args:
+            qp (list of df.trialfunction)
+            vphi (list of df.testfunction)
+        '''
+        
+        G = self.G 
+        rho = self.fluid_params["rho"]
+        mu = self.fluid_params["rho"]
+        
+        # split out the components
+        qs, lams, p = qp[0:G.num_edges], qp[G.num_edges:-1], qp[-1]
+        vs, xis, phi = vphi[0:G.num_edges], vphi[G.num_edges:-1], vphi[-1]
+    
+    
+        dx = Measure('dx', domain=G.global_mesh)
+        a = Constant(0)*p*phi*dx
+    
+
+        # Assemble edge contributions to a and L
+        for i, e in enumerate(G.edges):
+            
+            msh = G.edges[e]['submesh']
+            
+            Res = G.edges[e]['res']
+            Ainv = G.edges[e]['Ainv']
+
+            dx_edge = Measure("dx", domain = msh)
+            
+            # Add variational terms defined on edge
+            a += (
+                    + mu*Ainv*G.dds(qs[i])*G.dds(vs[i])*dx_edge
+                    - p*G.dds(vs[i])*dx_edge
+                    + G.dds(qs[i])*phi*dx_edge
+                    + mu*Ainv*Res*qs[i]*vs[i]*dx_edge
+                )
+            
+            # Assemble vertex contribution to a, i.e. the bifurcation condition
+        for i, b in enumerate(G.bifurcation_ixs):
+            a += G.ip_jump_lm(qs, xis[i], b) + G.ip_jump_lm(vs, lams[i], b)
+        
+        return a 
+   
+    def L(self, vphi, f, ns):
+        '''
+        Make linear form L
+        
+        Args:
+            vphi (list of df.testfunction)
+            f (df.expression): conservation of mass eq. source term
+            ns (df.expression): normal stress at boundaries
+    
+        '''
+        
+        G = self.G 
+        
+        # split out the components
+        vs, xis, phi = vphi[0:G.num_edges], vphi[G.num_edges:-1], vphi[-1]
+    
+        dx = Measure('dx', domain=G.global_mesh)
+        L = f*phi*dx
+
+
+        # Assemble edge contributions to a and L
+        for i, e in enumerate(G.edges):
+            
+            msh = G.edges[e]['submesh']
+            vf = G.edges[e]['vf']
+            
+            ds_edge = Measure('ds', domain=msh, subdomain_data=vf)
+
+            L -= ns*vs[i]*ds_edge(BOUN_IN)
+            L += ns*vs[i]*ds_edge(BOUN_OUT)
+       
+        return L
+
+ 
+        
+
+
+def network_stokes(G, fluid_params, t_steps, T, t_step_scheme = 'IE',
+                   q0=None, p0=None, f=Constant(0), g=Constant(0), ns = Constant(0)):
     '''
     Solve reduced network Stokes model 
         rho/A d/dt q + mu*R/A q - mu/A d^2/ds^2 q + d/ds p = g
@@ -101,14 +202,19 @@ def network_stokes(G, fluid_params, t_steps, T, q0=None, f=Constant(0), g=Consta
         fluid_params (dict): dict with values for rho
         t_steps (int): number of time steps
         T (float): end time
+        t_step_scheme (str): time stepping scheme, either CN or IE
         f (df.function): fluid source term
         g (df.function): force source term
         ns (df.function): normal stress for neumann bcs
+        
+    The time stepping scheme can be set as "CN" (Crank-Nicholson) or IE (implicit Euler)
     '''
     
     mesh = G.global_mesh
-    rho = Constant(fluid_params['rho'])
-    mu=Constant(fluid_params['nu'])*rho
+     
+    rho = Constant(fluid_params["rho"])
+    mu = Constant(fluid_params["rho"])
+    
     
     # Flux spaces on each segment, ordered by the edge list
     submeshes = list(nx.get_edge_attributes(G, 'submesh').values())
@@ -128,82 +234,65 @@ def network_stokes(G, fluid_params, t_steps, T, q0=None, f=Constant(0), g=Consta
     # Trial and test functions
     vphi = TestFunctions(W)
     qp = TrialFunctions(W)
+    
+    # split out the components
+    qs, lams, p = qp[0:G.num_edges], qp[G.num_edges:-1], qp[-1]
+    vs, xis, phi = vphi[0:G.num_edges], vphi[G.num_edges:-1], vphi[-1]
 
     qp_n = Function(W)
-    if q0:
-        for i in range(0, G.num_edges):
-            assign(qp_n.sub(i), interpolate(q0, W.sub_space(i)))
-
-    # split out the components
-    qs = qp[0:G.num_edges]
-    lams = qp[G.num_edges:-1]
-    p = qp[-1]
-
-    vs = vphi[0:G.num_edges]
-    xis = vphi[G.num_edges:-1]
-    phi = vphi[-1]
-
-
-    ## Assemble variational formulation 
+    q0_, p0_ = qp_n.split()
+    q0_.assign(q0)
+    p0_.assign(p0)
+    
     dt = Constant(T/t_steps)
-
-    dx = Measure('dx', domain=mesh)
-    a = Constant(0)*p*phi*dx
-    L = f*phi*dx
-
-
-    # Assemble edge contributions to a and L
+    dt_val = dt(0)
+        
+    qps = []
+    
+    model = NetworkStokes(G, fluid_params)
+    
+    if t_step_scheme is 'CN': 
+        b2, b1 = Constant(0.5), Constant(0.5)
+    else:
+        b2, b1 = Constant(1), Constant(0)
+        
+        
+    lhs_, rhs_ = 0, 0
     for i, e in enumerate(G.edges):
-        
+            
         msh = G.edges[e]['submesh']
-        vf = G.edges[e]['vf']
-        
-        Res = G.edges[e]['res']
         Ainv = G.edges[e]['Ainv']
 
         dx_edge = Measure("dx", domain = msh)
-        ds_edge = Measure('ds', domain=msh, subdomain_data=vf)
-
-        # Add variational terms defined on edge
-        a += (
-                rho*Ainv*qs[i]*vs[i]*dx_edge
-                + dt*mu*Ainv*G.dds(qs[i])*G.dds(vs[i])*dx_edge
-                - dt*p*G.dds(vs[i])*dx_edge
-                + G.dds(qs[i])*phi*dx_edge
-                + dt*mu*Ainv*Res*qs[i]*vs[i]*dx_edge
-            )
-
-        # Term from time derivative
-        L += + rho*Ainv*qp_n.sub(i)*vs[i]*dx_edge
-        L += dt*dot(g,vs[i])*dx_edge
+        
+        lhs_ += rho*Ainv*qs[i]*vs[i]*dx_edge      
+        rhs_ += rho*Ainv*qp_n.sub(i)*vs[i]*dx_edge
 
 
-        # Add boundary condition for inflow/outflow boundary node
-        L -= dt*ns*vs[i]*ds_edge(BOUN_IN)
-        L += dt*ns*vs[i]*ds_edge(BOUN_OUT)
-
-
-    # Assemble vertex contribution to a, i.e. the bifurcation condition
-    for i, b in enumerate(G.bifurcation_ixs):
-        a += G.ip_jump_lm(qs, xis[i], b) + G.ip_jump_lm(vs, lams[i], b)
-    
-    qps = []
-    
-    dt_val = dt(0)
     
     for t in np.linspace(dt_val, T, t_steps-1):
         
-        # Solve
-        f.t = t
-        g.t = t
-        ns.t = t
+        f.t, g.t, ns.t = t-dt_val, t-dt_val, t-dt_val
+        f_n, g_n, ns_n = [interpolate(func, FunctionSpace(mesh, 'CG', 3)) for func in [f, g, ns]]
+        f.t, g.t, ns.t = t, t, t
+        f_n1, g_n1, ns_n1 = [interpolate(func, FunctionSpace(mesh, 'CG', 3)) for func in [f, g, ns]]
+        
+        a_form_n1 = model.a(qp, vphi)
+        L_form_n1 = model.L(vphi, f_n1, ns_n1)
 
-        qp_n1 = mixed_dim_fenics_solve(a, L, W, mesh)
+        qp_n_list = [qp_n.sub(i) for i in range(0, W.num_sub_spaces())]
+        a_form_n = model.a(qp_n_list, vphi)
+        L_form_n = model.L(vphi, f_n, ns_n)
+        
+        lhs = lhs_ + b2*dt*a_form_n1
+        rhs = rhs_ + b2*dt*L_form_n1 - b1*dt*a_form_n  + b1*dt*L_form_n
+        
+        qp_n1 = mixed_dim_fenics_solve(lhs, rhs, W, mesh)
         
         qps.append(qp_n1) 
             
         # Update qp_ 
-        for s in range(0, G.num_edges):
+        for s in range(0, W.num_sub_spaces()):
             assign(qp_n.sub(s), qp_n1.sub(s))
             
 
@@ -294,7 +383,7 @@ def test_reduced_stokes():
     ns = mu*Ainv*q.diff(x)-p 
 
     f, g, q, p, ns = [Expression(sym.printing.ccode(func), degree=2, t=0) for func in [f,g, q, p, ns]]
-    
+    qp0 = Expression((sym.printing.ccode(q),sym.printing.ccode(p)), degree=2)
     
     print('****************************************************************')
     print('        Explicit computations         Via errornorm             ')
@@ -312,7 +401,7 @@ def test_reduced_stokes():
         G.edges[e]['Ainv']=Ainv
 
 
-    qps = network_stokes(G, fluid_params, t_steps=30, T=1, q0=q, f=f, g=g, ns=ns)
+    qps = network_stokes(G, fluid_params, t_steps=30, T=1, qp0=qp0, f=f, g=g, ns=ns)
 
     vars = qps[0].split(deepcopy=True)
     qhs = vars[0:G.num_edges]
@@ -355,7 +444,7 @@ def convergence_test_stokes():
     import sympy as sym
     x, t, x_ = sym.symbols('x[0] t x_')
     
-    q = sym.cos(6.28*x)
+    q = sym.cos(2*sym.pi*x) + sym.sin(2*sym.pi*t)
     f = q.diff(x)
     
     dsp = +sym.diff(sym.diff(q, x), x) - q - sym.diff(q, t)
@@ -372,7 +461,9 @@ def convergence_test_stokes():
     
     # Normal stress
     ns = mu*Ainv*q.diff(x)-p 
-
+    
+    q0 = Expression(sym.printing.ccode(q), degree=2, t=0)
+    p0 = Expression(sym.printing.ccode(p), degree=2, t=0)
     f, g, q, p, ns = [Expression(sym.printing.ccode(func), degree=2, t=0) for func in [f,g, q, p, ns]]
     
     
@@ -382,7 +473,7 @@ def convergence_test_stokes():
     print('*********************************')
     for N in [0, 1, 2, 3, 4, 5]:
 
-        G = make_line_graph(4)
+        G = make_line_graph(2)
 
         G.make_mesh(N)
 
@@ -394,8 +485,8 @@ def convergence_test_stokes():
             G.edges[e]['Ainv']=Ainv
 
         q.t = 0
-        t_steps = 2
-        qps = network_stokes(G, fluid_params, t_steps=t_steps, T=1, q0=q, f=f, g=g, ns=ns)
+        t_steps = 20
+        qps = network_stokes(G, fluid_params, t_steps=t_steps, T=1, q0=q0, p0=p0, f=f, g=g, ns=ns)
 
         vars = qps[-1].split(deepcopy=True)
         qhs = vars[0:G.num_edges]
@@ -428,6 +519,6 @@ def convergence_test_stokes():
 
 
 if __name__ == '__main__':
-    test_mass_conservation()
-    test_reduced_stokes()
+    #test_mass_conservation()
+    #test_reduced_stokes()
     convergence_test_stokes()

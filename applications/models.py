@@ -1,15 +1,171 @@
-from ast import Expr
+from tkinter import NE
 import networkx as nx
 from fenics import *
-
-from xii import *
-        
-
 import sys
 sys.path.append('../')
 from graphnics import *
+
+
+class HydraulicNetwork:
+    '''
+    Bilinear forms a and L for the hydraulic equations
+            R*q + d/ds p = g
+            d/ds q = f
+    on graph G, with bifurcation conditions q_in = q_out and continuous 
+    normal stress
     
-@timeit
+    Args:
+        G (FenicsGraph): Network domain
+        f (df.function): fluid source term
+        ns (df.function): normal stress for neumann bcs
+    '''
+    
+    def __init__(self, G, f, ns):
+        self.G = G
+        self.f = f
+        self.ns = ns
+        
+    def a(self, qp, vphi):
+        '''
+        Args:
+            qp (list of df.trialfunction)
+            vphi (list of df.testfunction)
+        '''
+        
+        G = self.G
+        
+        # split out the components
+        qs, lams, p = qp[0:G.num_edges], qp[G.num_edges:-1], qp[-1]
+        vs, xis, phi = vphi[0:G.num_edges], vphi[G.num_edges:-1], vphi[-1]
+    
+    
+        dx = Measure('dx', domain=G.global_mesh)
+        a = Constant(0)*p*phi*dx
+
+        # Assemble edge contributions to a and L
+        for i, e in enumerate(G.edges):
+            
+            Res = G.edges[e]['res']
+            dx_edge = Measure("dx", domain = G.edges[e]['submesh'])
+            
+            # Add variational terms defined on edge
+            a += (
+                    - p*G.dds(vs[i])*dx_edge
+                    + G.dds(qs[i])*phi*dx_edge
+                    + Res*qs[i]*vs[i]*dx_edge
+                 )
+            
+        # Assemble vertex contribution to a, i.e. the bifurcation condition
+        for i, b in enumerate(G.bifurcation_ixs):
+            a += G.ip_jump_lm(qs, xis[i], b) + G.ip_jump_lm(vs, lams[i], b)
+        
+        return a 
+   
+    def L(self, vphi):
+        '''
+        Args:
+            vphi (list of df.testfunction)
+        '''
+        
+        G = self.G 
+        
+        # split out the components
+        vs, xis, phi = vphi[0:G.num_edges], vphi[G.num_edges:-1], vphi[-1]
+    
+        dx = Measure('dx', domain=G.global_mesh)
+        L = self.f*phi*dx
+
+        # Assemble edge contributions to a and L
+        for i, e in enumerate(G.edges):
+            ds_edge = Measure('ds', domain=G.edges[e]['submesh'], subdomain_data=G.edges[e]['vf'])
+            L += self.ns*vs[i]*ds_edge(BOUN_OUT) - self.ns*vs[i]*ds_edge(BOUN_IN)
+       
+        return L
+    
+    def deep_copy(self, f, ns):
+        '''
+        For time stepping we might need to evaluate a and L at different time steps
+        
+        To this end we make a deep copy where separate fs and ns can be used
+        '''
+        model_copy = HydraulicNetwork(self.G, f, ns)
+        return model_copy
+
+
+
+class NetworkStokes(HydraulicNetwork):
+    '''
+    Bilinear forms a and L for the network stokes equations
+            mu*R/A q - mu/A d^2/ds^2 q + d/ds p = g
+            d/ds q = f
+    on graph G, with bifurcation conditions q_in = q_out and continuous 
+    normal stress
+    
+    The linear form L is inherited from HydraulicNetwork.
+    
+    Args:
+        G (FenicsGraph): Network domain
+        fluid_params (dict): values for mu and rho
+        f (df.function): fluid source term
+        ns (df.function): normal stress for neumann bcs
+ 
+    '''
+    
+    def __init__(self, G, fluid_params, f, ns):
+        self.G = G
+        self.fluid_params = fluid_params
+        self.f = f
+        self.ns = ns
+
+    def a(self, qp, vphi):
+        '''
+        Args:
+            qp (list of df.trialfunction)
+            vphi (list of df.testfunction)
+        '''
+        
+        G, mu = self.G, self.fluid_params["rho"]
+        
+        # split out the components
+        qs, lams, p = qp[0:G.num_edges], qp[G.num_edges:-1], qp[-1]
+        vs, xis, phi = vphi[0:G.num_edges], vphi[G.num_edges:-1], vphi[-1]
+    
+    
+        dx = Measure('dx', domain=G.global_mesh)
+        a = Constant(0)*p*phi*dx
+
+        # Assemble edge contributions to a and L
+        for i, e in enumerate(G.edges):
+            
+            Res, Ainv = [G.edges[e][key] for key in ['res', 'Ainv']]
+            dx_edge = Measure("dx", domain = G.edges[e]['submesh'])
+            
+            # Add variational terms defined on edge
+            a += (
+                    + mu*Ainv*G.dds(qs[i])*G.dds(vs[i])*dx_edge
+                    - p*G.dds(vs[i])*dx_edge
+                    + G.dds(qs[i])*phi*dx_edge
+                    + mu*Ainv*Res*qs[i]*vs[i]*dx_edge
+                )
+            
+        # Assemble vertex contribution to a, i.e. the bifurcation condition
+        for i, b in enumerate(G.bifurcation_ixs):
+            a += G.ip_jump_lm(qs, xis[i], b) + G.ip_jump_lm(vs, lams[i], b)
+        
+        return a
+    
+    def deep_copy(self, f, ns):
+        '''
+        For time stepping we might need to evaluate a and L at different time steps
+        
+        To this end we make a deep copy where separate fs and ns can be used
+        '''
+        model_copy = NetworkStokes(self.G, self.fluid_params, f, ns)
+        return model_copy
+
+   
+   
+
 def hydraulic_network(G, f=Constant(0), p_bc=Constant(0)):
     '''
     Solve hydraulic network model 
@@ -40,181 +196,44 @@ def hydraulic_network(G, f=Constant(0), p_bc=Constant(0)):
     spaces = P2s + LMs + [P1]
     W = MixedFunctionSpace(*spaces) 
 
-
     # Trial and test functions
     vphi = TestFunctions(W)
     qp = TrialFunctions(W)
 
-    # split out the components
-    qs = qp[0:G.num_edges]
-    lams = qp[G.num_edges:-1]
-    p = qp[-1]
-
-    vs = vphi[0:G.num_edges]
-    xis = vphi[G.num_edges:-1]
-    phi = vphi[-1]
-
-    
     ## Assemble variational formulation 
 
-    # Initialize a and L to be zero
-    dx = Measure('dx', domain=mesh)
-    a = Constant(0)*p*phi*dx
-    L = f*phi*dx
-
-    # Assemble edge contributions to a and L
-    for i, e in enumerate(G.edges):
-        
-        msh = G.edges[e]['submesh']
-        vf = G.edges[e]['vf']
-        res = G.edges[e]['res']
-        
-        dx_edge = Measure("dx", domain = msh)
-        ds_edge = Measure('ds', domain=msh, subdomain_data=vf)
-
-        # Add variational terms defined on edge
-        a += res*qs[i]*vs[i]*dx_edge        
-        a -= p*G.dds(vs[i])*dx_edge
-        a += phi*G.dds(qs[i])*dx_edge
-
-        # Add boundary condition for inflow/outflow boundary node
-        L += p_bc*vs[i]*ds_edge(BOUN_IN)
-        L -= p_bc*vs[i]*ds_edge(BOUN_OUT)
-
-    # Assemble vertex contribution to a, i.e. the bifurcation condition
-    for i, b in enumerate(G.bifurcation_ixs):
-        a += G.ip_jump_lm(qs, xis[i], b) + G.ip_jump_lm(vs, lams[i], b)
+    model = HydraulicNetwork(G, f, p_bc)
     
+    a = model.a(qp, vphi)
+    L = model.L(vphi)
     
     # Solve
     qp0 = mixed_dim_fenics_solve(a, L, W, mesh)
     return qp0
 
-
-
-class NetworkStokes():
-    '''
-    Bilinear forms a and L for the network stokes equations
-    
-    Args:
-        G (FenicsGraph): Network domain
-        fluid_params (dict): values for mu and rho
-        '''
-    
-    def __init__(self, G, fluid_params):
-        self.G = G
-        self.fluid_params = fluid_params
-        
-    def a(self, qp, vphi):
-        '''
-        Make bilinear form a 
-        
-        Args:
-            qp (list of df.trialfunction)
-            vphi (list of df.testfunction)
-        '''
-        
-        G = self.G 
-        rho = self.fluid_params["rho"]
-        mu = self.fluid_params["rho"]
-        
-        # split out the components
-        qs, lams, p = qp[0:G.num_edges], qp[G.num_edges:-1], qp[-1]
-        vs, xis, phi = vphi[0:G.num_edges], vphi[G.num_edges:-1], vphi[-1]
-    
-    
-        dx = Measure('dx', domain=G.global_mesh)
-        a = Constant(0)*p*phi*dx
-    
-
-        # Assemble edge contributions to a and L
-        for i, e in enumerate(G.edges):
-            
-            msh = G.edges[e]['submesh']
-            
-            Res = G.edges[e]['res']
-            Ainv = G.edges[e]['Ainv']
-
-            dx_edge = Measure("dx", domain = msh)
-            
-            # Add variational terms defined on edge
-            a += (
-                    + mu*Ainv*G.dds(qs[i])*G.dds(vs[i])*dx_edge
-                    - p*G.dds(vs[i])*dx_edge
-                    + G.dds(qs[i])*phi*dx_edge
-                    + mu*Ainv*Res*qs[i]*vs[i]*dx_edge
-                )
-            
-            # Assemble vertex contribution to a, i.e. the bifurcation condition
-        for i, b in enumerate(G.bifurcation_ixs):
-            a += G.ip_jump_lm(qs, xis[i], b) + G.ip_jump_lm(vs, lams[i], b)
-        
-        return a 
-   
-    def L(self, vphi, f, ns):
-        '''
-        Make linear form L
-        
-        Args:
-            vphi (list of df.testfunction)
-            f (df.expression): conservation of mass eq. source term
-            ns (df.expression): normal stress at boundaries
-    
-        '''
-        
-        G = self.G 
-        
-        # split out the components
-        vs, xis, phi = vphi[0:G.num_edges], vphi[G.num_edges:-1], vphi[-1]
-    
-        dx = Measure('dx', domain=G.global_mesh)
-        L = f*phi*dx
-
-
-        # Assemble edge contributions to a and L
-        for i, e in enumerate(G.edges):
-            
-            msh = G.edges[e]['submesh']
-            vf = G.edges[e]['vf']
-            
-            ds_edge = Measure('ds', domain=msh, subdomain_data=vf)
-
-            L -= ns*vs[i]*ds_edge(BOUN_IN)
-            L += ns*vs[i]*ds_edge(BOUN_OUT)
-       
-        return L
-
  
         
 
 
-def network_stokes(G, fluid_params, t_steps, T, t_step_scheme = 'IE',
-                   q0=None, p0=None, f=Constant(0), g=Constant(0), ns = Constant(0)):
+def time_dep_stokes(G, model, rho, t_steps, T, t_step_scheme = 'CN',
+                   q0=None, p0=None):
     '''
-    Solve reduced network Stokes model 
-        rho/A d/dt q + mu*R/A q - mu/A d^2/ds^2 q + d/ds p = g
-            d/ds q = f
-    on graph G, with bifurcation conditions q_in = q_out and continuous 
-    normal stress
-
+    Solve models of the type 
+        rho/A d/dt q + a((q,p,lam), (v,xi,phi)) = L(v,xi,phi;f,g,ns)
+    on graph G
+    
     Args:
         G (fg.FenicsGraph): problem domain
+        model (class): class containing a and L
         fluid_params (dict): dict with values for rho
         t_steps (int): number of time steps
         T (float): end time
         t_step_scheme (str): time stepping scheme, either CN or IE
-        f (df.function): fluid source term
-        g (df.function): force source term
-        ns (df.function): normal stress for neumann bcs
         
     The time stepping scheme can be set as "CN" (Crank-Nicholson) or IE (implicit Euler)
     '''
     
     mesh = G.global_mesh
-     
-    rho = Constant(fluid_params["rho"])
-    mu = Constant(fluid_params["rho"])
-    
     
     # Flux spaces on each segment, ordered by the edge list
     submeshes = list(nx.get_edge_attributes(G, 'submesh').values())
@@ -240,16 +259,16 @@ def network_stokes(G, fluid_params, t_steps, T, t_step_scheme = 'IE',
     vs, xis, phi = vphi[0:G.num_edges], vphi[G.num_edges:-1], vphi[-1]
 
     qp_n = Function(W)
-    q0_, p0_ = qp_n.split()
-    q0_.assign(q0)
-    p0_.assign(p0)
+    qp_n_list = qp_n.split()
+    q0s_, p0_  = qp_n_list[0:G.num_edges], qp_n_list[-1]
+    for i, q0_ in enumerate(q0s_):
+        q0_.assign(interpolate(q0, W.sub_space(i)))
+    p0_.assign(interpolate(p0, W.sub_space(W.num_sub_spaces()-1)))
     
     dt = Constant(T/t_steps)
     dt_val = dt(0)
         
     qps = []
-    
-    model = NetworkStokes(G, fluid_params)
     
     if t_step_scheme is 'CN': 
         b2, b1 = Constant(0.5), Constant(0.5)
@@ -269,20 +288,26 @@ def network_stokes(G, fluid_params, t_steps, T, t_step_scheme = 'IE',
         rhs_ += rho*Ainv*qp_n.sub(i)*vs[i]*dx_edge
 
 
+    # We make two copies of our model for time steps n and n+1
+    f, ns = model.f, model.ns
     
+    f.t, ns.t = 0, 0
+    f_n, ns_n = [interpolate(func, FunctionSpace(mesh, 'CG', 3)) for func in [f, ns]]
+    model_n = model.deep_copy(f_n, ns_n) #time step n
+    
+    f.t, ns.t = dt_val, dt_val
+    f_n1, ns_n1 = [interpolate(func, FunctionSpace(mesh, 'CG', 3)) for func in [f, ns]]
+    model_n1 = model.deep_copy(f_n1, ns_n1) #time step n+1
+    
+    # Get forms at each time
+    a_form_n1, L_form_n1 = model_n1.a(qp, vphi), model_n1.L(vphi)   
+    
+    qp_n_list = [qp_n.sub(i) for i in range(0, W.num_sub_spaces())]    # TODO: clean this?
+    a_form_n, L_form_n = model_n.a(qp_n_list, vphi), model_n.L(vphi)
+        
+   
+    # Now we time step
     for t in np.linspace(dt_val, T, t_steps-1):
-        
-        f.t, g.t, ns.t = t-dt_val, t-dt_val, t-dt_val
-        f_n, g_n, ns_n = [interpolate(func, FunctionSpace(mesh, 'CG', 3)) for func in [f, g, ns]]
-        f.t, g.t, ns.t = t, t, t
-        f_n1, g_n1, ns_n1 = [interpolate(func, FunctionSpace(mesh, 'CG', 3)) for func in [f, g, ns]]
-        
-        a_form_n1 = model.a(qp, vphi)
-        L_form_n1 = model.L(vphi, f_n1, ns_n1)
-
-        qp_n_list = [qp_n.sub(i) for i in range(0, W.num_sub_spaces())]
-        a_form_n = model.a(qp_n_list, vphi)
-        L_form_n = model.L(vphi, f_n, ns_n)
         
         lhs = lhs_ + b2*dt*a_form_n1
         rhs = rhs_ + b2*dt*L_form_n1 - b1*dt*a_form_n  + b1*dt*L_form_n
@@ -294,8 +319,22 @@ def network_stokes(G, fluid_params, t_steps, T, t_step_scheme = 'IE',
         # Update qp_ 
         for s in range(0, W.num_sub_spaces()):
             assign(qp_n.sub(s), qp_n1.sub(s))
-            
-
+        
+        # Update f and n at time steps n and n+1
+           
+        f_n, ns_n = [interpolate(func, FunctionSpace(mesh, 'CG', 3)) for func in [f, ns]]
+        f.t, ns.t = t+dt_val, t+dt_val
+        f_n1, ns_n1 = [interpolate(func, FunctionSpace(mesh, 'CG', 3)) for func in [f, ns]]
+        
+        model_n = model.deep_copy(f_n, ns_n) #time step n
+        model_n1 = model.deep_copy(f_n1, ns_n1) #time step n+1
+        
+        # Get forms at each time
+        a_form_n1, L_form_n1 = model_n1.a(qp, vphi), model_n1.L(vphi)   
+        
+        qp_n_list = [qp_n.sub(i) for i in range(0, W.num_sub_spaces())]    # TODO: clean this?
+        a_form_n, L_form_n = model_n.a(qp_n_list, vphi), model_n.L(vphi)
+        
     return qps
 
 
@@ -319,6 +358,9 @@ def test_mass_conservation():
 
     for G in Gs:
         G.make_mesh(0)
+        for e in G.in_edges(): G.in_edges()[e]['Res'] = 1
+        for e in G.out_edges(): G.out_edges()[e]['Res'] = 1
+        
         qp0 = hydraulic_network(G)
 
         vars = qp0.split()
@@ -355,7 +397,6 @@ def test_mass_conservation():
 def test_reduced_stokes():
     ''''
     Test approximation of reduced stokes against analytic solution
-
     '''
 
     fluid_params = {'rho':1, 'nu':1}
@@ -400,8 +441,9 @@ def test_reduced_stokes():
         G.edges[e]['res']=res
         G.edges[e]['Ainv']=Ainv
 
-
-    qps = network_stokes(G, fluid_params, t_steps=30, T=1, qp0=qp0, f=f, g=g, ns=ns)
+    model = NetworkStokes(G, fluid_params, f, ns)
+    
+    qps = time_dep_stokes(G, model, fluid_params, t_steps=30, T=1, qp0=qp0, f=f, g=g, ns=ns)
 
     vars = qps[0].split(deepcopy=True)
     qhs = vars[0:G.num_edges]
@@ -447,7 +489,7 @@ def convergence_test_stokes():
     q = sym.cos(2*sym.pi*x) + sym.sin(2*sym.pi*t)
     f = q.diff(x)
     
-    dsp = +sym.diff(sym.diff(q, x), x) - q - sym.diff(q, t)
+    dsp = sym.diff(sym.diff(q, x), x) - q - sym.diff(q, t)
     p_ = sym.integrate(dsp, (x, 0, x_))
     p = p_.subs(x_, x)
     
@@ -462,9 +504,8 @@ def convergence_test_stokes():
     # Normal stress
     ns = mu*Ainv*q.diff(x)-p 
     
-    q0 = Expression(sym.printing.ccode(q), degree=2, t=0)
-    p0 = Expression(sym.printing.ccode(p), degree=2, t=0)
-    f, g, q, p, ns = [Expression(sym.printing.ccode(func), degree=2, t=0) for func in [f,g, q, p, ns]]
+    f, g, q, p, ns, q0, p0 = [Expression(sym.printing.ccode(func), degree=2, t=0) 
+                                    for func in [f,g, q, p, ns, q, p]]
     
     
     print('*********************************')
@@ -473,7 +514,7 @@ def convergence_test_stokes():
     print('*********************************')
     for N in [0, 1, 2, 3, 4, 5]:
 
-        G = make_line_graph(2)
+        G = make_line_graph(3)
 
         G.make_mesh(N)
 
@@ -485,8 +526,9 @@ def convergence_test_stokes():
             G.edges[e]['Ainv']=Ainv
 
         q.t = 0
-        t_steps = 20
-        qps = network_stokes(G, fluid_params, t_steps=t_steps, T=1, q0=q0, p0=p0, f=f, g=g, ns=ns)
+        t_steps = 50
+        model = NetworkStokes(G, fluid_params, f, ns)
+        qps = time_dep_stokes(G, model, rho, t_steps=t_steps, T=1, q0=q0, p0=p0)
 
         vars = qps[-1].split(deepcopy=True)
         qhs = vars[0:G.num_edges]

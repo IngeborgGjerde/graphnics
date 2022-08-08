@@ -26,7 +26,7 @@ def timeit(func):
     return wrapper
 
 
-#@timeit
+@timeit
 def call_assemble_mixed_system(a, L, qp0):
     return assemble_mixed_system(a==L, qp0)
 
@@ -104,7 +104,9 @@ def mixed_dim_fenics_solve(a, L, W, mesh):
     
     # Assemble the system
     qp0 = Function(W)
+    print('Mixed dim fenics assembly...')
     system = call_assemble_mixed_system(a, L, qp0)
+    print('Done')
     
     A_list = system[0]
     rhs_blocks = system[1]

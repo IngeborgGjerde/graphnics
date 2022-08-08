@@ -316,7 +316,7 @@ def time_stepping_stokes(G, W, model, t_steps, T, t_step_scheme = 'CN', qp_n=Non
         print(f'Solving at t={t:1.3f}')
         
         lhs = lhs_ + b2*dt*a_form_n1
-        rhs = rhs_ + b2*dt*L_form_n1# - b1*dt*a_form_n  + b1*dt*L_form_n
+        rhs = rhs_ + b2*dt*L_form_n1 - b1*dt*a_form_n  + b1*dt*L_form_n
         
         qp_n1 = mixed_dim_fenics_solve(lhs, rhs, W, mesh)
         
@@ -332,6 +332,16 @@ def time_stepping_stokes(G, W, model, t_steps, T, t_step_scheme = 'CN', qp_n=Non
         f.t, ns.t = t+dt_val, t+dt_val
         f_n1, ns_n1 = [interpolate(func, FunctionSpace(mesh, 'CG', 3)) for func in [f, ns]]
         
+        model_n = model.deep_copy(f_n, ns_n) #time step n
+        
+        model_n1 = model.deep_copy(f_n1, ns_n1) #time step n+1
+        
+        # Get forms at each time
+        a_form_n1, L_form_n1 = model_n1.a(qp, vphi), model_n1.L(vphi)   
+        
+        qp_n_list = [qp_n.sub(i) for i in range(0, W.num_sub_spaces())] 
+        a_form_n, L_form_n = model_n.a(qp_n_list, vphi), model_n.L(vphi)
+    
     return qps
 
 
@@ -375,7 +385,7 @@ def time_dep_stokes(G, model, t_steps, T, t_step_scheme = 'CN',
     for i, func in enumerate(q0 + [p0]):
         qp_n.sub(i).assign(interpolate(func, W.sub_space(i)))
     
-    qps = time_stepping_stokes(G, W, model, t_steps, 1, t_step_scheme, qp_n)
+    qps = time_stepping_stokes(G, W, model, t_steps, T, t_step_scheme, qp_n)
     
     return qps
 

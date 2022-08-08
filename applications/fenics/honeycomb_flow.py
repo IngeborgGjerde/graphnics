@@ -1,10 +1,10 @@
 import networkx as nx
 from fenics import *
 import sys
-sys.path.append('../')
+sys.path.append('../../')
 
 from graphnics import *
-from models import *
+from networkmodels import *
 import numpy as np
 
 ''''
@@ -37,9 +37,9 @@ if __name__ == '__main__':
     mu = fluid_params["nu"]*fluid_params["rho"]
     fluid_params["mu"] = mu
 
-    t_steps = 10
+    t_steps = 4
     
-    n_combs = [1]
+    n_combs = [1, 2, 3]
     
     for n_comb in n_combs:
         G = honeycomb(n_comb, n_comb)

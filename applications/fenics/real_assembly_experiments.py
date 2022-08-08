@@ -87,7 +87,7 @@ def hydraulic_network_with_custom_assembly(G, f=Constant(0), p_bc=Constant(0)):
 
 import argparse
 import os
-from models import hydraulic_network
+from applications.models.models import hydraulic_network_simulation
 
 if __name__ == '__main__':
     '''
@@ -105,7 +105,7 @@ if __name__ == '__main__':
     if args.customassembly: 
         modelfunc = hydraulic_network_with_custom_assembly
     else: 
-        modelfunc = hydraulic_network
+        modelfunc = hydraulic_network_simulation
     
     
     # Clear fenics cache

@@ -363,7 +363,6 @@ def test_fenics_graph():
         
 
 if __name__ == '__main__':
-    
     test_fenics_graph()
 
     

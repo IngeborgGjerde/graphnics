@@ -2,7 +2,7 @@
 import networkx as nx
 from fenics import *
 import sys
-sys.path.append('../')
+sys.path.append('../../') 
 from graphnics import *
 
 time_stepping_schemes = {'IE':{'b1':Constant(0), 'b2':Constant(1)},
@@ -410,8 +410,11 @@ def test_mass_conservation():
 
     for G in Gs:
         G.make_mesh(0)
-        for e in G.in_edges(): G.in_edges()[e]['Res'] = 1
-        for e in G.out_edges(): G.out_edges()[e]['Res'] = 1
+        for e in G.in_edges(): 
+            G.in_edges()[e]['res'] = 1
+        for e in G.out_edges(): 
+            G.out_edges()[e]['res'] = 1
+        
         
         qp0 = hydraulic_network_simulation(G)
 
@@ -454,6 +457,7 @@ def test_reduced_stokes():
     fluid_params = {'rho':1, 'nu':1}
     rho = fluid_params['rho']
     mu = rho*fluid_params['nu']
+    fluid_params['mu'] = mu
 
     res = 0.1
     Ainv = 2
@@ -475,8 +479,9 @@ def test_reduced_stokes():
     # Normal stress
     ns = mu*Ainv*q.diff(x)-p 
 
-    f, g, q, p, ns = [Expression(sym.printing.ccode(func), degree=2, t=0) for func in [f,g, q, p, ns]]
-    qp0 = Expression((sym.printing.ccode(q),sym.printing.ccode(p)), degree=2)
+    f, g, q, p, ns, q0, p0 = [Expression(sym.printing.ccode(func), degree=2, t=0) for func in [f,g, q, p, ns, q, p]]
+    
+    
     
     print('****************************************************************')
     print('        Explicit computations         Via errornorm             ')
@@ -495,7 +500,7 @@ def test_reduced_stokes():
 
     model = NetworkStokes(G, fluid_params, f, ns)
     
-    qps = time_dep_stokes(G, model, fluid_params, t_steps=30, T=1, qp0=qp0, f=f, g=g, ns=ns)
+    qps = time_dep_stokes(G, model, t_steps=30, T=1, q0=[q0]*G.num_edges, p0=p0)
 
     vars = qps[0].split(deepcopy=True)
     qhs = vars[0:G.num_edges]
@@ -615,8 +620,7 @@ def convergence_test_stokes(t_step_scheme):
 
 
 if __name__ == '__main__':
-    #test_mass_conservation()
-    #test_reduced_stokes()
-    import sys
-    t_step_scheme = sys.argv[1]
-    convergence_test_stokes(t_step_scheme)
+    test_mass_conservation()
+    test_reduced_stokes()
+    #t_step_scheme = sys.argv[1]
+    #convergence_test_stokes(t_step_scheme)

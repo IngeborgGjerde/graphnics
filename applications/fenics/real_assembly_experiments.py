@@ -1,9 +1,11 @@
 import networkx as nx
 from fenics import *
-from fenics_graph import *
-from utils import *
-from graph_examples import *
-from utils import timeit
+
+import sys
+sys.path.append('../../')
+from graphnics import *
+
+from graphnics import *
     
 parameters["form_compiler"]["cpp_optimize"] = True
 
@@ -87,7 +89,7 @@ def hydraulic_network_with_custom_assembly(G, f=Constant(0), p_bc=Constant(0)):
 
 import argparse
 import os
-from applications.models.models import hydraulic_network_simulation
+from networkmodels import hydraulic_network_simulation
 
 if __name__ == '__main__':
     '''

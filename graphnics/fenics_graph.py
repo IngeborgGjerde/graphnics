@@ -1,6 +1,7 @@
 import networkx as nx
 import numpy as np
 from fenics import *
+from xii import *
 
 '''
 The Graphnics class constructs fenics meshes from networkx directed graphs.
@@ -82,8 +83,7 @@ class FenicsGraph(nx.DiGraph):
         mf = MeshFunction('size_t', mesh, 1)
         mf.array()[:]=range(0,len(self.edges()))
         self.mf = mf
-        File('plots/test.pvd')<<mf
-
+        
         
         # Refine global mesh until desired resolution
         for i in range(0, n):
@@ -105,7 +105,7 @@ class FenicsGraph(nx.DiGraph):
 
         # Make and store one submesh for each edge
         for i, (u,v) in enumerate(self.edges):
-            self.edges[u,v]['submesh']=MeshView.create(self.mf, i)
+            self.edges[u,v]['submesh']=SubDomainMesh(self.mf, i)
 
         # Compute tangent vectors
         self.assign_tangents()
@@ -218,6 +218,15 @@ class FenicsGraph(nx.DiGraph):
         '''
         return dot(grad(f), self.global_tangent)
 
+    def dds_e(self, f, e):
+        '''
+        function for derivative df/ds along graph
+        '''
+            
+        edge_tangent = Restriction(self.global_tangent, self.edges[e]['submesh'])
+        
+        return dot(grad(f), edge_tangent)
+
 
     def jump_vector(self, q, ix, j):
         '''
@@ -271,6 +280,7 @@ class FenicsGraph(nx.DiGraph):
             ip -= qs[edge_ix]*xi*ds_edge(BIF_OUT)
 
         return ip
+
 
 
 

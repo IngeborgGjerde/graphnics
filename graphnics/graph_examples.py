@@ -2,16 +2,20 @@
 import networkx as nx
 from .fenics_graph import *
 
-def make_line_graph(n):
+def make_line_graph(n, dim=2):
     '''
     Make a graph along the unit x-axis with n nodes
+    
+    Args: 
+        n (int): number of graph nodes
+        dim (int): spatial dimension
     '''
 
     G = FenicsGraph()
     dx = 1/(n-1)
     G.add_nodes_from(range(0,n))
     for i in range(0,n):
-        G.nodes[i]['pos']=[i*dx,0]
+        G.nodes[i]['pos']=[i*dx] + [0]*(dim-1)  # coords is (dx, 0) in 2D and (dx, 0, 0) in 3D
     
     for i in range(0,n-1):
         G.add_edge(i,i+1)

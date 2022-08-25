@@ -1,0 +1,12 @@
+*.xml
+*.png
+*.msh
+*.vtu
+*.pvd
+*.geo
+*.mat
+*csv*
+*.png
+*.h5
+*.xdmf
+*.pyc

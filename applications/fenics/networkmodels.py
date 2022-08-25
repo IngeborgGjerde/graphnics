@@ -272,7 +272,8 @@ def time_stepping_stokes(G, W, model, t_steps, T, t_step_scheme = 'CN', qp_n=Non
     dt_val = dt(0)
      
     ## Assemble the left-hand side and right-hand sides of the discretized system   
-    lhs_, rhs_ = 0, 0
+    dx = Measure("dx", domain = G.global_mesh)
+    lhs_, rhs_ = Constant(0)*p*phi*dx, Constant(0)*phi*dx 
     
     # We discretize the time derivative term as rho/A d/dt q = rho/A (qn1 - qn)/Delta t
     for i, e in enumerate(G.edges):
@@ -283,6 +284,11 @@ def time_stepping_stokes(G, W, model, t_steps, T, t_step_scheme = 'CN', qp_n=Non
         lhs_ += rho*Ainv*qs[i]*vs[i]*dx_edge # qn1 belongs to the lhs as it is unknown
         rhs_ += rho*Ainv*qp_n.sub(i)*vs[i]*dx_edge # qn belongs to the rhs as it is known
 
+    
+    #alist = extract_blocks(lhs_)
+    #blist = extract_blocks(rhs_)
+    #blocks = [assemble_mixed(a_) for a_ in alist]
+    #blocks = [assemble_mixed(a_) for a_ in blist]
     
     # The weights and evaluation time points for a(U,V) and L(v) depend on the scheme
     

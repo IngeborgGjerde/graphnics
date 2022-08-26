@@ -1,7 +1,7 @@
 from fenics import *
 import scipy.sparse as sp
 from petsc4py import PETSc
-
+import numpy as np
 
 from time import time
 from functools import wraps
@@ -174,6 +174,35 @@ def zero_PETScMat(n,m):
     petsc_mat.assemble()
     
     return PETScMatrix(petsc_mat)
+
+
+def get_dof_ix_of_point(func_space, point):
+    dof_coords = func_space.tabulate_dof_coordinates()
+    return np.where(np.linalg.norm(dof_coords-point, axis=1)<DOLFIN_EPS)[0][0]
+
+
+def add_to_matrix(A, i, j, value):
+    # To add to existing values:
+    ADD_MODE = PETSc.InsertMode.ADD
+
+    # To replace values instead:
+    #ADD_MODE = PETSc.InsertMode.INSERT
+    Am = as_backend_type(A).mat()
+
+    # If the value you want to modify is not allocated as a nonzero, you need to
+    # set this option (with some cost to performance).  Ideally, you would
+    # set up a matrix with the necessary space allocated, assemble into that one,
+    # and then edit values without this.
+    Am.setOption(PETSc.Mat.Option.NEW_NONZERO_ALLOCATION_ERR, False)
+
+    # In parallel, you want to make sure a given value is added only once, ideally
+    # on the process that owns that row of the matrix.  (Can skip the check for
+    # ownership range in serial.)
+    Istart, Iend = Am.getOwnershipRange()
+    if(i<Iend and i>=Istart):
+        Am.setValue(i,j,value,addv=ADD_MODE)
+    Am.assemble()
+    return A
 
 
 class CharacteristicFunction(UserExpression):

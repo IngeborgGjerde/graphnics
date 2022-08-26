@@ -35,9 +35,11 @@ class HydraulicNetwork:
             vphi (list of df.testfunction)
         '''
         
+        n_edges = self.G.num_edges
+
         # split out the components
-        qs, lams, p = qp[0:self.G.num_edges], qp[self.G.num_edges:-1], qp[-1]
-        vs, xis, phi = vphi[0:self.G.num_edges], vphi[self.G.num_edges:-1], vphi[-1]
+        qs, lams, p = qp[0:n_edges], qp[n_edges:n_edges*2], qp[n_edges*2:]
+        vs, xis, phi = vphi[0:n_edges], vphi[n_edges:n_edges*2], vphi[n_edges*2:]
     
         ## Assemble a
         dx = Measure('dx', domain=self.G.global_mesh)
@@ -45,7 +47,7 @@ class HydraulicNetwork:
 
         for i, e in enumerate(self.G.edges):
             
-            Res = self.G.edges[e]['res']
+            Res = 1#self.G.edges[e]['res']
             dx_edge = Measure("dx", domain = self.G.edges[e]['submesh'])
             
             # Add variational terms defined on edge
@@ -147,7 +149,8 @@ class NetworkStokes(HydraulicNetwork):
 
         for i, e in enumerate(G.edges):
             
-            Res, Ainv = [G.edges[e][key] for key in ['res', 'Ainv']]
+            #Res, Ainv = [G.edges[e][key] for key in ['res', 'Ainv']]
+            Res, Ainv = 1, 1
             dx_edge = Measure("dx", domain = G.edges[e]['submesh'])
             
             # Add variational terms defined on edge
@@ -203,18 +206,18 @@ def hydraulic_network_simulation(G, f=Constant(0), p_bc=Constant(0)):
     
     mesh = G.global_mesh
 
-    # Flux spaces on each segment, ordered by the edge list
+    # Flux and pressure spaces on each segment, ordered by the edge list
     submeshes = list(nx.get_edge_attributes(G, 'submesh').values())
     P2s = [FunctionSpace(msh, 'CG', 2) for msh in submeshes] 
+    P1s = [FunctionSpace(msh, 'CG', 1) for msh in submeshes] 
     
     # Real space on each bifurcation, ordered by G.bifurcation_ixs
     LMs = [FunctionSpace(mesh, 'R', 0) for b in G.bifurcation_ixs] 
 
     # Pressure space on global mesh
-    P1 = FunctionSpace(mesh, 'CG', 1) # Pressure space (on whole mesh)
     
     ### Function spaces
-    spaces = P2s + LMs + [P1]
+    spaces = P2s + P1s + LMs
     W = MixedFunctionSpace(*spaces) 
 
     # Trial and test functions
@@ -272,8 +275,7 @@ def time_stepping_stokes(G, W, model, t_steps, T, t_step_scheme = 'CN', qp_n=Non
     dt_val = dt(0)
      
     ## Assemble the left-hand side and right-hand sides of the discretized system   
-    dx = Measure("dx", domain = G.global_mesh)
-    lhs_, rhs_ = Constant(0)*p*phi*dx, Constant(0)*phi*dx 
+    lhs_, rhs_ = 0, 0
     
     # We discretize the time derivative term as rho/A d/dt q = rho/A (qn1 - qn)/Delta t
     for i, e in enumerate(G.edges):
@@ -284,11 +286,6 @@ def time_stepping_stokes(G, W, model, t_steps, T, t_step_scheme = 'CN', qp_n=Non
         lhs_ += rho*Ainv*qs[i]*vs[i]*dx_edge # qn1 belongs to the lhs as it is unknown
         rhs_ += rho*Ainv*qp_n.sub(i)*vs[i]*dx_edge # qn belongs to the rhs as it is known
 
-    
-    #alist = extract_blocks(lhs_)
-    #blist = extract_blocks(rhs_)
-    #blocks = [assemble_mixed(a_) for a_ in alist]
-    #blocks = [assemble_mixed(a_) for a_ in blist]
     
     # The weights and evaluation time points for a(U,V) and L(v) depend on the scheme
     

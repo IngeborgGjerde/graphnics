@@ -101,7 +101,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-customassembly', help='whether to do custom assembly of real spaces', default=True, type=str)
+    parser.add_argument('-customassembly', help='whether to do custom assembly of real spaces', default=False, type=int)
     args = parser.parse_args()
 
     if args.customassembly: 
@@ -112,12 +112,12 @@ if __name__ == '__main__':
     
     # Clear fenics cache
     print('Clearing cache')
-    os.system('dijitso clean') 
+    #os.system('dijitso clean') 
     
     # Profile against a simple line graph with n nodes    
-    n = 3
+    n = 21
     G = make_line_graph(n)
-    G.make_mesh(1) # we use just one cell per edge 
+    G.make_mesh(2) # we use just one cell per edge 
     mesh = G.global_mesh
     num_bifs = len(G.bifurcation_ixs)
 

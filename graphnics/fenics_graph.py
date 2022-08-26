@@ -105,7 +105,8 @@ class FenicsGraph(nx.DiGraph):
 
         # Make and store one submesh for each edge
         for i, (u,v) in enumerate(self.edges):
-            self.edges[u,v]['submesh']=MeshView.create(self.mf, i)
+            #self.edges[u,v]['submesh']=MeshView.create(self.mf, i)
+            self.edges[u,v]['submesh']=SubMesh(mesh, self.mf, i)
 
         # Compute tangent vectors
         self.assign_tangents()
@@ -140,6 +141,7 @@ class FenicsGraph(nx.DiGraph):
 
         # Store these as global variables
         self.bifurcation_ixs = bifurcation_ixs
+        self.num_bifurcations = len(bifurcation_ixs)
         self.boundary_ixs = boundary_ixs
         
         # Loop through all bifurcation ixs and mark the vfs

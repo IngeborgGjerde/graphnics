@@ -207,8 +207,8 @@ def test_mass_conservation():
 if __name__ == '__main__':
     
     import os
-    os.system('dijitso clean') 
-    G = make_line_graph(20)
+    #os.system('dijitso clean') 
+    G = make_line_graph(22)
     G.make_mesh(2)
     
     qp0 = hydraulic_network_simulation(G, p_bc = Expression('x[0]', degree=2))

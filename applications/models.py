@@ -6,31 +6,37 @@ import sys
 sys.path.append('../') 
 from graphnics import *
 
-time_stepping_schemes = {'IE':{'b1':Constant(0), 'b2':Constant(1)},
-                         'CN':{'b1':Constant(0.5), 'b2':Constant(0.5)}}
-    
 
 class HydraulicNetwork:
     '''
     Bilinear forms a and L for the hydraulic equations
-            R*q + d/ds p = g
+            Res*q + d/ds p = g
             d/ds q = f
     on graph G, with bifurcation conditions q_in = q_out and continuous 
     normal stress
     
     Args:
         G (FenicsGraph): Network domain
-        f (df.function): fluid source term
-        ns (df.function): normal stress for neumann bcs
+        Res (dict): dictionary with edge->resistance
+        f (df.expr): source term
+        p_bc (df.expr): pressure boundary condition
     '''
     
-    def __init__(self, G):
+    def __init__(self, G, Res=None, f=Constant(0), p_bc=Constant(0)):
         '''
         Set up function spaces and store model paramters f and ns
         '''
         
         # Graph on which the model lives
         self.G = G
+
+        # Model parameters
+
+        if Res is None:
+            Res = { e:Constant(1) for e in self.G.edges() }
+        self.Res = Res
+        self.f = f
+        self.p_bc = p_bc
 
         # Setup function spaces: 
         # - flux space on each segment, ordered by the edge list
@@ -51,40 +57,51 @@ class HydraulicNetwork:
         self.vphi = list(map(TestFunction, W))
             
 
-    def a_form(self):
+    def add_form_edges(self, a, qp):
         '''
-        The bilinear form
+        Add edge contributions to the bilinear form
         '''
 
-        qp, vphi = self.qp, self.vphi
+        vphi = self.vphi
         G = self.G
         
         # split out the components
         n_edges = G.num_edges
 
-        qs, p, lams = qp[0:n_edges], qp[n_edges], qp[n_edges+1:]
-        vs, phi, xis = vphi[0:n_edges], vphi[n_edges], vphi[n_edges+1:]
+        qs, vs = qp[0:n_edges], vphi[0:n_edges]
 
         submeshes = list(nx.get_edge_attributes(G, 'submesh').values())
-        ps = [Restriction(p, msh) for msh in submeshes]
-        phis = [Restriction(phi, msh) for msh in submeshes]
+        ps = [Restriction(qp[n_edges], msh) for msh in submeshes]
+        phis = [Restriction(vphi[n_edges], msh) for msh in submeshes]
 
-        ## Init a as list of lists        
-        a = [[ 0 for i in range(0, len(qp))  ] for j in range(0, len(qp))]
-        
         # edge contributions to form
         for i, e in enumerate(G.edges):
             
             dx_edge = Measure("dx", domain = G.edges[e]['submesh'])
             
-            a[i][i] += qs[i]*vs[i]*dx_edge 
+            a[i][i] += self.Res[e]*qs[i]*vs[i]*dx_edge 
             a[n_edges][i] += + G.dds_i(qs[i], i)*phis[i]*dx_edge
             a[i][n_edges] += - ps[i]*G.dds_i(vs[i], i)*dx_edge
 
+        return a
         
+        
+    def add_form_bifs(self, a, qp):
+        '''
+        Bifurcation point contributions to bilinear form a
+        ''' 
+
+        vphi = self.vphi
+        G = self.G
+        
+        # split out the components
+        n_edges = G.num_edges
+        
+        qs, lams = qp[0:n_edges], qp[n_edges+1:]
+        vs, xis = vphi[0:n_edges], vphi[n_edges+1:]
+
         edge_list = list(G.edges.keys())
         
-
         # bifurcation condition contributions to form
         for b_ix, b in enumerate(G.bifurcation_ixs):
 
@@ -102,14 +119,30 @@ class HydraulicNetwork:
 
            
         return a 
-   
-    def L_form(self, f, p_bc):
+
+    def a_form(self, qp=None):
         '''
-        The right-hand side linear form
+        The bilinear form
 
         Args:
-            f (df.expr): source term
-            p_bc (df.expr): pressure boundary condition
+            Res (dict): dictionary with edge->resistance
+        '''
+
+        ## Init a as list of lists        
+        a = [[ 0 for i in range(0, len(self.qp))  ] for j in range(0, len(self.qp))]
+
+        if qp is None:
+            qp = self.qp
+
+        a = self.add_form_edges(a, qp)
+        a = self.add_form_bifs(a, qp)
+
+        return a
+
+
+    def L_form(self):
+        '''
+        The right-hand side linear form
         '''
         
         vphi = self.vphi
@@ -129,14 +162,88 @@ class HydraulicNetwork:
             ds_edge = Measure('ds', domain=self.G.edges[e]['submesh'], subdomain_data=self.G.edges[e]['vf'])
             dx_edge = Measure("dx", domain = self.G.edges[e]['submesh'])
             
-            L[i] += p_bc*vs[i]*ds_edge(BOUN_OUT) - p_bc*vs[i]*ds_edge(BOUN_IN)
-            L[n_edges] += f*phis[i]*dx_edge
+            L[i] += self.p_bc*vs[i]*ds_edge(BOUN_OUT) - self.p_bc*vs[i]*ds_edge(BOUN_IN)
+            L[n_edges] += self.f*phis[i]*dx_edge
 
         for i in range(0, len(self.G.bifurcation_ixs)):       
             L[n_edges+1+i] += Constant(0)*xis[i]*dx
         return L
-    
 
+
+
+
+class NetworkStokes(HydraulicNetwork):
+    '''
+    Bilinear forms a and L for the hydraulic equations
+            R*q + d^2/ds^2 q + d/ds p = g
+            d/ds q = f
+    on graph G, with bifurcation conditions q_in = q_out and continuous 
+    normal stress
+    
+    Args:
+        G (FenicsGraph): Network domain
+        Res (dict): dictionary with edge->resistance
+        nu (df.expr): viscosity
+        f (df.expr): source term
+        p_bc (df.expr): pressure boundary condition
+    '''
+
+    def __init__(self, G, Res=None, nu=Constant(1), f=Constant(0), p_bc=Constant(0)):
+        self.nu = nu
+        super().__init__(G, Res, f, p_bc)
+
+    def add_form_edges(self, a, qp):
+        '''
+        The bilinear form
+        '''
+
+        qp, vphi = self.qp, self.vphi
+        G = self.G
+        
+        # split out the components
+        n_edges = G.num_edges
+
+        qs, vs = qp[0:n_edges], vphi[0:n_edges]
+
+        submeshes = list(nx.get_edge_attributes(G, 'submesh').values())
+        ps = [Restriction(qp[n_edges], msh) for msh in submeshes]
+        phis = [Restriction(vphi[n_edges], msh) for msh in submeshes]
+
+        # edge contributions to form
+        for i, e in enumerate(G.edges):
+            
+            dx_edge = Measure("dx", domain = G.edges[e]['submesh'])
+            
+            #from IPython import embed
+            #embed()
+            print('i', i)
+
+            a[i][i] += self.Res[e]*qs[i]*vs[i]*dx_edge 
+            a[i][i] += self.nu*G.dds_i(qs[i],i)*G.dds_i(vs[i],i)*dx_edge 
+            a[n_edges][i] += + G.dds_i(qs[i], i)*phis[i]*dx_edge
+            a[i][n_edges] += - ps[i]*G.dds_i(vs[i], i)*dx_edge
+
+        return a
+       
+
+    def a_form(self, qp=None):
+        '''
+        The bilinear form
+
+        Args:
+            Res (dict): dictionary with edge->resistance
+            nu (df.expr): 1d viscosity
+        '''
+
+        ## Init a as list of lists        
+        a = [[ 0 for i in range(0, len(self.qp))  ] for j in range(0, len(self.qp))]
+
+        if qp is None: qp = self.qp
+
+        a = self.add_form_edges(a, qp)
+        a = self.add_form_bifs(a, qp)
+
+        return a
 
 
 
@@ -158,11 +265,11 @@ def test_mass_conservation():
         
         G.make_mesh(5)
 
-        model = HydraulicNetwork(G)
+        model = HydraulicNetwork(G, p_bc=Expression('x[0]', degree=2))
         
         W = model.W
         a = model.a_form()
-        L = model.L_form(f=Constant(0), p_bc=Expression(('x[0]'), degree=2))
+        L = model.L_form()
         
         A, b = map(ii_assemble, (a,L))
         A, b = map(ii_convert, (A,b))
@@ -198,8 +305,5 @@ def test_mass_conservation():
 
 
 if __name__ == '__main__':
-    
-    #import os
-    #os.system('dijitso clean') 
     
     test_mass_conservation()

@@ -57,12 +57,12 @@ class HydraulicNetwork:
         self.vphi = list(map(TestFunction, W))
             
 
-    def add_form_edges(self, a, qp):
+    def add_form_edges(self, a):
         '''
         Add edge contributions to the bilinear form
         '''
 
-        vphi = self.vphi
+        qp, vphi = self.qp, self.vphi
         G = self.G
         
         # split out the components
@@ -86,12 +86,12 @@ class HydraulicNetwork:
         return a
         
         
-    def add_form_bifs(self, a, qp):
+    def add_form_bifs(self, a):
         '''
         Bifurcation point contributions to bilinear form a
         ''' 
 
-        vphi = self.vphi
+        qp, vphi = self.qp, self.vphi
         G = self.G
         
         # split out the components
@@ -120,7 +120,7 @@ class HydraulicNetwork:
            
         return a 
 
-    def a_form(self, qp=None):
+    def a_form(self):
         '''
         The bilinear form
 
@@ -131,11 +131,8 @@ class HydraulicNetwork:
         ## Init a as list of lists        
         a = [[ 0 for i in range(0, len(self.qp))  ] for j in range(0, len(self.qp))]
 
-        if qp is None:
-            qp = self.qp
-
-        a = self.add_form_edges(a, qp)
-        a = self.add_form_bifs(a, qp)
+        a = self.add_form_edges(a)
+        a = self.add_form_bifs(a)
 
         return a
 
@@ -192,7 +189,7 @@ class NetworkStokes(HydraulicNetwork):
         self.nu = nu
         super().__init__(G, Res, f, p_bc)
 
-    def add_form_edges(self, a, qp):
+    def add_form_edges(self, a):
         '''
         The bilinear form
         '''
@@ -213,11 +210,7 @@ class NetworkStokes(HydraulicNetwork):
         for i, e in enumerate(G.edges):
             
             dx_edge = Measure("dx", domain = G.edges[e]['submesh'])
-            
-            #from IPython import embed
-            #embed()
-            print('i', i)
-
+          
             a[i][i] += self.Res[e]*qs[i]*vs[i]*dx_edge 
             a[i][i] += self.nu*G.dds_i(qs[i],i)*G.dds_i(vs[i],i)*dx_edge 
             a[n_edges][i] += + G.dds_i(qs[i], i)*phis[i]*dx_edge
@@ -226,7 +219,7 @@ class NetworkStokes(HydraulicNetwork):
         return a
        
 
-    def a_form(self, qp=None):
+    def a_form(self):
         '''
         The bilinear form
 
@@ -238,10 +231,8 @@ class NetworkStokes(HydraulicNetwork):
         ## Init a as list of lists        
         a = [[ 0 for i in range(0, len(self.qp))  ] for j in range(0, len(self.qp))]
 
-        if qp is None: qp = self.qp
-
-        a = self.add_form_edges(a, qp)
-        a = self.add_form_bifs(a, qp)
+        a = self.add_form_edges(a)
+        a = self.add_form_bifs(a)
 
         return a
 

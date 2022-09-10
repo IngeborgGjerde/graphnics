@@ -24,7 +24,7 @@ class HydraulicNetwork:
     
     def __init__(self, G, Res=None, f=Constant(0), p_bc=Constant(0)):
         '''
-        Set up function spaces and store model paramters f and ns
+        Set up function spaces and store model parameters f and ns
         '''
         
         # Graph on which the model lives
@@ -68,7 +68,7 @@ class HydraulicNetwork:
         # split out the components
         n_edges = G.num_edges
 
-        qs, vs = qp[0:n_edges], vphi[0:n_edges]
+        qs, vs = qp[:n_edges], vphi[:n_edges]
 
         submeshes = list(nx.get_edge_attributes(G, 'submesh').values())
         ps = [Restriction(qp[n_edges], msh) for msh in submeshes]
@@ -116,8 +116,6 @@ class HydraulicNetwork:
 
                 a[e_ix][n_edges+1+b_ix] += sign*vs[e_ix]*lams[b_ix]*ds_edge(tag)
                 a[n_edges+1+b_ix][e_ix] += sign*qs[e_ix]*xis[b_ix]*ds_edge(tag)
-
-           
         return a 
 
     def a_form(self):
@@ -160,10 +158,12 @@ class HydraulicNetwork:
             dx_edge = Measure("dx", domain = self.G.edges[e]['submesh'])
             
             L[i] += self.p_bc*vs[i]*ds_edge(BOUN_OUT) - self.p_bc*vs[i]*ds_edge(BOUN_IN)
-            L[n_edges] += self.f*phis[i]*dx_edge
-
+        
+            L[n_edges+i] += self.f*phis[i]*dx_edge
+        
         for i in range(0, len(self.G.bifurcation_ixs)):       
             L[n_edges+1+i] += Constant(0)*xis[i]*dx
+        
         return L
 
 
@@ -269,16 +269,6 @@ def test_mass_conservation():
         solver = LUSolver(A, 'mumps')
         solver.solve(qp.vector(), b)
 
-        plot_solution = False
-        if plot_solution:
-            qq = GlobalFlux(G, qp[:G.num_edges])
-            pp = qp[G.num_edges]
-            pp.rename('pp', '0')
-            File('pp.pvd') << pp      
-            qq_i = interpolate(qq, VectorFunctionSpace(G.global_mesh, 'DG', 1, G.global_mesh.geometric_dimension()))
-            File('qq.pvd') << qq_i        
-            qq_i.rename('qq', '0')
-
         edge_list = list(G.edges.keys())
 
         for b in G.bifurcation_ixs:
@@ -295,6 +285,94 @@ def test_mass_conservation():
             assert near(total_flux, 1e-3, 2e-3), f'Mass is not conserved at bifurcation {b} for {test_name}'
 
 
+
+def convergence_test_stokes(bifurcations=0):
+    ''''
+    Test approximation of steady state reduced stokes against analytic solution
+'''
+
+    fluid_params = {'rho':1, 'nu':1}
+    rho = fluid_params['rho']
+    mu = rho*fluid_params['nu']
+    fluid_params["mu"] = mu
+
+    # We make the global q and global p smooth, so that the normal stress is continuous
+    import sympy as sym
+    x, x_ = sym.symbols('x[0] x_')
+    
+    q = sym.sin(2*3.14*x)
+    f = q.diff(x)
+    
+    dsp = - q # - sym.diff(sym.diff(q, x), x)
+    p_ = sym.integrate(dsp, (x, 0, x_))
+    p = p_.subs(x_, x)
+    
+
+    print('Analytic solutions')
+    print('q =', sym.printing.latex(q))
+    print('p =', sym.printing.latex(p))
+    print('f =', sym.printing.latex(f))
+    
+    # Normal stress
+    #ns = mu*Ainv*q.diff(x)-p 
+    ns = -p 
+    
+    f, q, p, ns = [Expression(sym.printing.ccode(func), degree=2) for func in [f, q, p, ns]]
+
+    print('*********************************')
+    print('h       ||q_e||_L2  ||p_e||_L2   ')
+    print('*********************************')
+    for N in [1, 2, 3, 4]:
+        
+        G = make_line_graph(bifurcations+2)
+        G.make_mesh(N)
+
+        model = HydraulicNetwork(G, f=f, p_bc = ns)
+
+        qp_n = ii_Function(model.W)
+        qp_a = [q]*G.num_edges + [p] + [ns]*G.num_bifurcations
+
+        for i, func in enumerate(qp_a):
+            qp_n[i].vector()[:] = interpolate(func, model.W[i]).vector().get_local()
+
+        a = model.a_form()
+        L = model.L_form()
+        A, b = [ii_convert(ii_assemble(term)) for term in [a, L]]
+        sol = ii_Function(model.W)  
+        solver = LUSolver(A, 'mumps')
+        solver.solve(sol.vector(), b)
+
+        qhs, ph = sol[:G.num_edges], sol[G.num_edges]
+
+        # Compute and print errors
+        pa = interpolate(p, FunctionSpace(G.global_mesh, 'CG', 2))
+        p_error = errornorm(ph, pa)
+        q_error = 0
+        print(G.edges())
+        for i, e in enumerate(G.edges()):
+            qa = interpolate(q, FunctionSpace(G.edges[e]["submesh"], 'CG', 3))
+            q_error += errornorm(qhs[i], qa)
+            
+        print(f'{G.global_mesh.hmin():1.3f}  &  {q_error:1.2e}  &   {p_error:1.2e}')
+        
+        import matplotlib.pyplot as plt
+    
+        # Plot solutions
+        plt.figure()
+        plt.plot(ph.function_space().tabulate_dof_coordinates()[:,0], ph.vector().get_local(), '*', label='h')
+        plt.plot(pa.function_space().tabulate_dof_coordinates()[:,0], pa.vector().get_local(), '.', label='a')
+        plt.legend()
+        plt.savefig(f'sol-p.png')
+        
+        plt.figure()
+        plt.plot(qhs[0].function_space().tabulate_dof_coordinates()[:,0], qhs[0].vector().get_local(), '*', label='h')
+        plt.plot(qa.function_space().tabulate_dof_coordinates()[:,0], qa.vector().get_local(), '.', label='a')
+        plt.legend()
+        plt.savefig(f'sol-q.png')
+
+
+
 if __name__ == '__main__':
     
-    test_mass_conservation()
+    #test_mass_conservation()
+    convergence_test_stokes()

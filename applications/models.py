@@ -47,10 +47,12 @@ class HydraulicNetwork:
         P2s = [FunctionSpace(msh, 'CG', 2) for msh in submeshes] 
         P1s = [FunctionSpace(G.global_mesh, 'CG', 1)] 
         LMs = [FunctionSpace(G.global_mesh, 'R', 0) for b in G.bifurcation_ixs]
-    
+
         ### Function spaces
         W = P2s + P1s + LMs
         self.W = W
+
+        self.meshes = submeshes + [G.global_mesh]*(G.num_bifurcations+1) # associated meshes
 
         # Trial and test functions
         self.qp = list(map(TrialFunction, W))
@@ -69,10 +71,11 @@ class HydraulicNetwork:
         n_edges = G.num_edges
 
         qs, vs = qp[:n_edges], vphi[:n_edges]
+        p, phi = qp[n_edges], vphi[n_edges]
 
         submeshes = list(nx.get_edge_attributes(G, 'submesh').values())
-        ps = [Restriction(qp[n_edges], msh) for msh in submeshes]
-        phis = [Restriction(vphi[n_edges], msh) for msh in submeshes]
+        ps = [Restriction(p, msh) for msh in submeshes]
+        phis = [Restriction(phi, msh) for msh in submeshes]
 
         # edge contributions to form
         for i, e in enumerate(G.edges):
@@ -116,7 +119,23 @@ class HydraulicNetwork:
 
                 a[e_ix][n_edges+1+b_ix] += sign*vs[e_ix]*lams[b_ix]*ds_edge(tag)
                 a[n_edges+1+b_ix][e_ix] += sign*qs[e_ix]*xis[b_ix]*ds_edge(tag)
+        
         return a 
+
+    def init_a_form(self):
+        '''
+        Init a
+        '''
+        
+        ## Init a as list of lists        
+        a = [[ 0 for i in range(0, len(self.qp))  ] for j in range(0, len(self.qp))]
+
+        # Init zero diagonal elements (for shape info)
+        for i, msh in enumerate(self.meshes):
+            a[i][i] += Constant(0)*self.qp[i]*self.vphi[i]*Measure('dx', domain=msh)
+
+        return a
+
 
     def a_form(self):
         '''
@@ -126,20 +145,34 @@ class HydraulicNetwork:
             Res (dict): dictionary with edge->resistance
         '''
 
-        ## Init a as list of lists        
-        a = [[ 0 for i in range(0, len(self.qp))  ] for j in range(0, len(self.qp))]
-
+        a = self.init_a_form()
         a = self.add_form_edges(a)
         a = self.add_form_bifs(a)
 
         return a
 
 
+    def init_L_form(self):
+        '''
+        Init L 
+        '''
+        
+        L = [ 0 for i in range(0, len(self.vphi))  ]
+
+        # Init zero diagonal elements (for shape info)
+        for i, msh in enumerate(self.meshes):
+            dx = Measure('dx', domain=msh)
+            L[i] += Constant(0)*self.vphi[i]*dx
+
+        return L
+
     def L_form(self):
         '''
         The right-hand side linear form
         '''
         
+        L = self.init_L_form()
+
         vphi = self.vphi
 
         # split out the components
@@ -149,9 +182,6 @@ class HydraulicNetwork:
         submeshes = list(nx.get_edge_attributes(self.G, 'submesh').values())
         phis = [Restriction(phi, msh) for msh in submeshes]
 
-        
-        L = [ 0 for i in range(0, len(vphi))  ]
-
         # Assemble edge contributions to a and L
         for i, e in enumerate(self.G.edges):
             ds_edge = Measure('ds', domain=self.G.edges[e]['submesh'], subdomain_data=self.G.edges[e]['vf'])
@@ -159,7 +189,7 @@ class HydraulicNetwork:
             
             L[i] += self.p_bc*vs[i]*ds_edge(BOUN_OUT) - self.p_bc*vs[i]*ds_edge(BOUN_IN)
         
-            L[n_edges+i] += self.f*phis[i]*dx_edge
+            L[n_edges] += self.f*phis[i]*dx_edge
         
         for i in range(0, len(self.G.bifurcation_ixs)):       
             L[n_edges+1+i] += Constant(0)*xis[i]*dx
@@ -185,8 +215,8 @@ class NetworkStokes(HydraulicNetwork):
         p_bc (df.expr): pressure boundary condition
     '''
 
-    def __init__(self, G, Res=None, nu=Constant(1), f=Constant(0), p_bc=Constant(0)):
-        self.nu = nu
+    def __init__(self, G, Res=None, mu=Constant(1), f=Constant(0), p_bc=Constant(0)):
+        self.mu =mu
         super().__init__(G, Res, f, p_bc)
 
     def add_form_edges(self, a):
@@ -210,9 +240,12 @@ class NetworkStokes(HydraulicNetwork):
         for i, e in enumerate(G.edges):
             
             dx_edge = Measure("dx", domain = G.edges[e]['submesh'])
+            
+            Res, Ainv = [self.G.edges()[e][key] for key in ['Res', 'Ainv']]
           
-            a[i][i] += self.Res[e]*qs[i]*vs[i]*dx_edge 
-            a[i][i] += self.nu*G.dds_i(qs[i],i)*G.dds_i(vs[i],i)*dx_edge 
+            a[i][i] += Res*qs[i]*vs[i]*dx_edge 
+            a[i][i] += self.mu*Ainv*G.dds_i(qs[i],i)*G.dds_i(vs[i],i)*dx_edge 
+            
             a[n_edges][i] += + G.dds_i(qs[i], i)*phis[i]*dx_edge
             a[i][n_edges] += - ps[i]*G.dds_i(vs[i], i)*dx_edge
 
@@ -286,58 +319,62 @@ def test_mass_conservation():
 
 
 
-def convergence_test_stokes(bifurcations=0):
+def convergence_test_stokes(bifurcations=1):
     ''''
     Test approximation of steady state reduced stokes against analytic solution
-'''
+    '''
 
-    fluid_params = {'rho':1, 'nu':1}
-    rho = fluid_params['rho']
-    mu = rho*fluid_params['nu']
-    fluid_params["mu"] = mu
+    # Model parameters
+    rho = 10
+    nu = 2
+    mu = rho*nu
+    Ainv = 0.5
+    Res = 10
 
     # We make the global q and global p smooth, so that the normal stress is continuous
     import sympy as sym
     x, x_ = sym.symbols('x[0] x_')
     
-    q = sym.sin(2*3.14*x)
+    q = sym.sin(2*3.14159*x)
     f = q.diff(x)
     
-    dsp = - q # - sym.diff(sym.diff(q, x), x)
+    dsp = - Res*q + mu*Ainv*sym.diff(sym.diff(q, x), x)
     p_ = sym.integrate(dsp, (x, 0, x_))
     p = p_.subs(x_, x)
     
-
+    ns = mu*Ainv*q.diff(x)-p # Normal stress
+    
     print('Analytic solutions')
     print('q =', sym.printing.latex(q))
     print('p =', sym.printing.latex(p))
     print('f =', sym.printing.latex(f))
     
-    # Normal stress
-    #ns = mu*Ainv*q.diff(x)-p 
-    ns = -p 
-    
     f, q, p, ns = [Expression(sym.printing.ccode(func), degree=2) for func in [f, q, p, ns]]
 
+    # Solve on increasingly fine meshes and record errors
     print('*********************************')
     print('h       ||q_e||_L2  ||p_e||_L2   ')
     print('*********************************')
-    for N in [1, 2, 3, 4]:
+    for N in [1, 2, 3, 4, 5]:
         
         G = make_line_graph(bifurcations+2)
         G.make_mesh(N)
 
-        model = HydraulicNetwork(G, f=f, p_bc = ns)
-
+        prop_dict = {key: { 'Res':Constant(Res),'Ainv':Constant(Ainv)} for key in list(G.edges.keys())}
+        nx.set_edge_attributes(G, prop_dict)
+    
+        model = NetworkStokes(G, f=f, p_bc = ns, mu=Constant(mu))
+    
         qp_n = ii_Function(model.W)
         qp_a = [q]*G.num_edges + [p] + [ns]*G.num_bifurcations
 
         for i, func in enumerate(qp_a):
             qp_n[i].vector()[:] = interpolate(func, model.W[i]).vector().get_local()
 
-        a = model.a_form()
-        L = model.L_form()
-        A, b = [ii_convert(ii_assemble(term)) for term in [a, L]]
+        A = ii_convert(ii_assemble(model.a_form()))
+        b = ii_convert(ii_assemble(model.L_form()))
+        A, b = [ii_convert(ii_assemble(term)) for term in [model.a_form(), model.L_form()]]
+        
         sol = ii_Function(model.W)  
         solver = LUSolver(A, 'mumps')
         solver.solve(sol.vector(), b)

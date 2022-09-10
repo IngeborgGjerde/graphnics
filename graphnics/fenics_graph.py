@@ -1,11 +1,14 @@
 import networkx as nx
 import numpy as np
 from fenics import *
+from xii import *
 
 '''
 The Graphnics class constructs fenics meshes from networkx directed graphs.
 
-TODO: Add possibility for specifying Dirichlet bc nodes
+TODO: 
+-   Add possibility for specifying Dirichlet bc nodes
+-   Modify iterator for edge/nodes?
 '''
 
 
@@ -52,8 +55,7 @@ class FenicsGraph(nx.DiGraph):
         for each edge
         
         '''
-
-
+        
         # Store the coordinate dimensions
         geom_dim = len(self.nodes[1]['pos']) 
         self.geom_dim = geom_dim
@@ -76,7 +78,6 @@ class FenicsGraph(nx.DiGraph):
         [editor.add_cell(i, cell.tolist()) for i, cell in enumerate(cells_array)]
 
         editor.close()
-
 
         # Make meshfunction containing edge ixs
         mf = MeshFunction('size_t', mesh, 1)
@@ -105,8 +106,8 @@ class FenicsGraph(nx.DiGraph):
 
         # Make and store one submesh for each edge
         for i, (u,v) in enumerate(self.edges):
-            #self.edges[u,v]['submesh']=MeshView.create(self.mf, i)
-            self.edges[u,v]['submesh']=SubMesh(mesh, self.mf, i)
+            self.edges[u,v]['submesh'] = EmbeddedMesh(mf, i)
+            #self.edges[u,v]['submesh'] = MeshView.create(self.mf, i)
 
         # Compute tangent vectors
         self.assign_tangents()
@@ -220,6 +221,13 @@ class FenicsGraph(nx.DiGraph):
         '''
         return dot(grad(f), self.global_tangent)
 
+    def dds_i(self, f, i):
+        '''
+        function for derivative df/ds along graph on branch i
+        '''
+        tangent = self.tangents[i][1]
+        return dot(grad(f), Constant(tangent))
+
 
     def jump_vector(self, q, ix, j):
         '''
@@ -301,6 +309,27 @@ class GlobalFlux(UserExpression):
 
     def value_shape(self):
         return (self.G.geom_dim,)
+
+
+class GlobalPressure(UserExpression):
+    '''
+    Evaluates P1 pressure on each edge
+    '''
+    def __init__(self, G, ps, **kwargs):
+        '''
+        Args:
+            G (nx.graph): Network graph
+            qs (list): list of fluxes on each edge in the branch
+        '''
+        
+        self.G=G
+        self.ps = ps
+        super().__init__(**kwargs)
+
+    def eval_cell(self, values, x, cell):
+        edge = self.G.mf[cell.index]
+        values[0] = self.ps[edge](x)
+
 
 
 class TangentFunction(UserExpression):

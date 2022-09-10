@@ -45,15 +45,19 @@ def time_stepping_stokes(model, rho=Constant(1), t_steps=10, T=1, qp_n=None, t_s
         Ainv = Constant(1) # TODO: change to model.G.edges[e]['Ainv']
         
         Dn1[i][i] += rho*Ainv*qs[i]*vs[i]*dx_edge  
-        Dn[i]    += rho*Ainv*qp_n[i]*vs[i]*dx_edge 
+        Dn[i]     += rho*Ainv*qp_n[i]*vs[i]*dx_edge 
 
 
     for i in range(model.G.num_edges, len(model.W)):
         Dn1[i][i] += Constant(0)*model.qp[i]*model.vphi[i]*dx
-        Dn[i]    += Constant(0)*model.vphi[i]*dx
+        Dn[i]     += Constant(0)*model.vphi[i]*dx
 
     # Finally we time step
-    qps = []
+    qp_0 = ii_Function(model.W)
+    for i, f0 in enumerate(qp_0):
+        f0.vector()[:] = interpolate(qp_n[i], model.W[i]).vector().get_local()
+
+    qps = [qp_0]
 
     a = model.a_form()
     L = model.L_form()
@@ -64,27 +68,29 @@ def time_stepping_stokes(model, rho=Constant(1), t_steps=10, T=1, qp_n=None, t_s
     
     model.f.t, model.p_bc.t = dt, dt
     An1, Ln1, DDn1 = [ii_convert(ii_assemble(term)) for term in [a, L, Dn1]]
-    
+
+    import numpy as np
+    np.set_printoptions(3)
+
     for t in np.linspace(dt, T, t_steps-1):
-        
-        A = ii_convert( DDn1 + dt*cn1*An1 ) 
-        b = ii_convert( DDn  + dt*cn1*Ln1 - dt*cn*An*qp_n.vector() + dt*cn*Ln )
+
+        A = ii_convert( DDn1 + cn1*dt*An1 ) 
+        b = ii_convert( DDn  + cn1*dt*Ln1 - dt*cn*An*qp_n.vector() + dt*cn*Ln )
 
         sol = ii_Function(model.W)  
         solver = LUSolver(A, 'mumps')
         solver.solve(sol.vector(), b)
 
         qps.append(sol) 
-
         # Update qp_n
-        [qp_n[i].assign(func) for i, func in enumerate(sol)]
 
+        [qp_n[i].assign(func) for i, func in enumerate(sol)]
+        
         # Update f and n to next time step
         model.f.t, model.p_bc.t = t,t
         An, Ln, DDn = [ii_convert(ii_assemble(term)) for term in [a, L, Dn]]
-    
+        
         model.f.t, model.p_bc.t = t+dt, t+dt
         An1, Ln1, DDn1 = [ii_convert(ii_assemble(term)) for term in [a, L, Dn1]]
-    
         
     return qps

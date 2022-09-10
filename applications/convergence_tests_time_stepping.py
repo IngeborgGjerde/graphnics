@@ -1,4 +1,3 @@
-from re import T
 from fenics import *
 import sys
 sys.path.append('../')
@@ -7,7 +6,7 @@ from applications.models import *
 from time_stepping import time_stepping_stokes
         
 
-def convergence_test_stokes(t_step_scheme, t_steps=10, bifurcations=0):
+def convergence_test_stokes(t_step_scheme, t_steps=10, T = 1, bifurcations=0):
     ''''
     Test approximation of reduced stokes against analytic solution
 
@@ -27,35 +26,32 @@ def convergence_test_stokes(t_step_scheme, t_steps=10, bifurcations=0):
 
     # We make the global q and global p smooth, so that the normal stress is continuous
     import sympy as sym
-    x, t, x_ = sym.symbols('x[0] t x_')
+    x, t, x_, pi = sym.symbols('x[0] t x_ pi')
     
-    q = sym.cos(2*sym.pi*x)# + sym.sin(2*sym.pi*t)
+    q = sym.sin(2*pi*x) + sym.cos(2*pi*t)
     f = q.diff(x)
     
-    dsp = sym.diff(sym.diff(q, x), x) - q - sym.diff(q, t)
+    dsp = - q - sym.diff(q, t)# - sym.diff(sym.diff(q, x), x)
     p_ = sym.integrate(dsp, (x, 0, x_))
     p = p_.subs(x_, x)
     
-    # Force source
-    g = 0
 
     print('Analytic solutions')
-    print('q', sym.printing.latex(q))
-    print('p', sym.printing.latex(p))
-    print('f', sym.printing.latex(f))
+    print('q =', sym.printing.latex(q))
+    print('p =', sym.printing.latex(p))
+    print('f =', sym.printing.latex(f))
     
     # Normal stress
-    ns = mu*Ainv*q.diff(x)-p 
+    #ns = mu*Ainv*q.diff(x)-p 
+    ns = -p 
     
-    f, g, q, p, ns, q0, p0 = [Expression(sym.printing.ccode(func), degree=2, t=0) 
-                                    for func in [f,g, q, p, ns, q, p]]
+    f, q, p, ns = [Expression(sym.printing.ccode(func), degree=2, t=0, pi=np.pi) for func in [f, q, p, ns]]
     
     
     print('*********************************')
-    print('        Explicit computations    ')
     print('h       ||q_e||_L2  ||p_e||_L2   ')
     print('*********************************')
-    for N in [0, 1, 2, 3, 4, 5]:
+    for N in [1, 2, 3, 4, 5, 6]:
 
         G = make_line_graph(bifurcations+2)
 
@@ -69,26 +65,24 @@ def convergence_test_stokes(t_step_scheme, t_steps=10, bifurcations=0):
             G.edges[e]['Ainv']=Ainv
 
         p.t, q.t, ns.t = 0, 0, 0
-        model = NetworkStokes(G, f=f, p_bc = ns)
+        model = HydraulicNetwork(G, f=f, p_bc = ns)
 
         qp_n = ii_Function(model.W)
-        qp_a = [q0]*G.num_edges + [p0] + [ns]*G.num_bifurcations
+        qp_a = [q]*G.num_edges + [p] + [ns]*G.num_bifurcations
 
-        for i, f in enumerate(qp_a):
-            qp_n[i].vector()[:] = interpolate(f, model.W[i]).vector().get_local()
+        for i, func in enumerate(qp_a):
+            qp_n[i].vector()[:] = interpolate(func, model.W[i]).vector().get_local()
 
-
-        qps = time_stepping_stokes(model, rho, t_steps=t_steps, T=1, qp_n=qp_n, t_step_scheme=t_step_scheme)
+        qps = time_stepping_stokes(model, rho, t_steps=t_steps, T=T, qp_n=qp_n, t_step_scheme=t_step_scheme)
 
         # Get final solution
         vars = qps[-1]
         qhs, ph = vars[0:G.num_edges], vars[G.num_edges]
-        p.t, q.T = T, T
-
+        p.t, q.t = T, T
 
         # Compute and print errors
-        pa2 = interpolate(p, FunctionSpace(G.global_mesh, 'CG', 2))
-        p_error = errornorm(ph, pa2)
+        pa = interpolate(p, FunctionSpace(G.global_mesh, 'CG', 2))
+        p_error = errornorm(ph, pa)
         q_error = 0
         for i, e in enumerate(G.edges()):
             qa = interpolate(q, FunctionSpace(G.edges[e]["submesh"], 'CG', 3))
@@ -96,22 +90,20 @@ def convergence_test_stokes(t_step_scheme, t_steps=10, bifurcations=0):
             
         print(f'{G.global_mesh.hmin():1.3f}  &  {q_error:1.2e}  &   {p_error:1.2e}')
         
-        
-        # Plot solutions
         import matplotlib.pyplot as plt
+    
+        # Plot solutions
         plt.figure()
         plt.plot(ph.function_space().tabulate_dof_coordinates()[:,0], ph.vector().get_local(), '*', label='h')
-        plt.plot(pa2.function_space().tabulate_dof_coordinates()[:,0], pa2.vector().get_local(), '.', label='a')
+        plt.plot(pa.function_space().tabulate_dof_coordinates()[:,0], pa.vector().get_local(), '.', label='a')
         plt.legend()
-        plt.savefig('sol-p.png')
+        plt.savefig(f'sol-p.png')
         
         plt.figure()
         plt.plot(qhs[0].function_space().tabulate_dof_coordinates()[:,0], qhs[0].vector().get_local(), '*', label='h')
         plt.plot(qa.function_space().tabulate_dof_coordinates()[:,0], qa.vector().get_local(), '.', label='a')
         plt.legend()
-        plt.savefig('sol-q.png')
-
-        
+        plt.savefig(f'sol-q.png')
 
 
 if __name__ == '__main__':
@@ -119,5 +111,6 @@ if __name__ == '__main__':
     t_step_scheme = sys.argv[1]
     t_steps = int(sys.argv[2])
     bifurcations = int(sys.argv[3])
-    
-    convergence_test_stokes(t_step_scheme, t_steps, bifurcations)
+    T = 1
+
+    convergence_test_stokes(t_step_scheme, t_steps, T, bifurcations)

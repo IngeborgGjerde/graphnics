@@ -59,11 +59,37 @@ class HydraulicNetwork:
         self.vphi = list(map(TestFunction, W))
             
 
-    def add_form_edges(self, a):
+    def diag_a_form_on_edges(self, a=None):
         '''
         Add edge contributions to the bilinear form
         '''
 
+        if not a: a = self.init_a_form()
+        
+        qp, vphi = self.qp, self.vphi
+        G = self.G
+        
+        # split out the components
+        n_edges = G.num_edges
+
+        qs, vs = qp[:n_edges], vphi[:n_edges]
+        
+        # edge contributions to form
+        for i, e in enumerate(G.edges):
+            dx_edge = Measure("dx", domain = G.edges[e]['submesh'])
+    
+            a[i][i] += self.Res[e]*qs[i]*vs[i]*dx_edge 
+        
+        return a
+
+
+    def offdiag_a_form_on_edges(self, a=None):
+        '''
+        Add edge contributions to the bilinear form
+        '''
+
+        if not a: a = self.init_a_form()
+        
         qp, vphi = self.qp, self.vphi
         G = self.G
         
@@ -82,18 +108,19 @@ class HydraulicNetwork:
             
             dx_edge = Measure("dx", domain = G.edges[e]['submesh'])
             
-            a[i][i] += self.Res[e]*qs[i]*vs[i]*dx_edge 
             a[n_edges][i] += + G.dds_i(qs[i], i)*phis[i]*dx_edge
             a[i][n_edges] += - ps[i]*G.dds_i(vs[i], i)*dx_edge
 
         return a
         
         
-    def add_form_bifs(self, a):
+    def a_form_on_bifs(self, a=None):
         '''
         Bifurcation point contributions to bilinear form a
         ''' 
-
+        
+        if not a: a = self.init_a_form()        
+        
         qp, vphi = self.qp, self.vphi
         G = self.G
         
@@ -146,8 +173,9 @@ class HydraulicNetwork:
         '''
 
         a = self.init_a_form()
-        a = self.add_form_edges(a)
-        a = self.add_form_bifs(a)
+        a = self.diag_a_form_on_edges(a)
+        a = self.offdiag_a_form_on_edges(a)
+        a = self.a_form_on_bifs(a)
 
         return a
 
@@ -219,10 +247,12 @@ class NetworkStokes(HydraulicNetwork):
         self.mu =mu
         super().__init__(G, Res, f, p_bc)
 
-    def add_form_edges(self, a):
+    def diag_a_form_on_edges(self, a=None):
         '''
         The bilinear form
         '''
+
+        if not a: a = self.init_a_form()
 
         qp, vphi = self.qp, self.vphi
         G = self.G
@@ -231,10 +261,6 @@ class NetworkStokes(HydraulicNetwork):
         n_edges = G.num_edges
 
         qs, vs = qp[0:n_edges], vphi[0:n_edges]
-
-        submeshes = list(nx.get_edge_attributes(G, 'submesh').values())
-        ps = [Restriction(qp[n_edges], msh) for msh in submeshes]
-        phis = [Restriction(vphi[n_edges], msh) for msh in submeshes]
 
         # edge contributions to form
         for i, e in enumerate(G.edges):
@@ -245,30 +271,8 @@ class NetworkStokes(HydraulicNetwork):
           
             a[i][i] += Res*qs[i]*vs[i]*dx_edge 
             a[i][i] += self.mu*Ainv*G.dds_i(qs[i],i)*G.dds_i(vs[i],i)*dx_edge 
-            
-            a[n_edges][i] += + G.dds_i(qs[i], i)*phis[i]*dx_edge
-            a[i][n_edges] += - ps[i]*G.dds_i(vs[i], i)*dx_edge
 
         return a
-       
-
-    def a_form(self):
-        '''
-        The bilinear form
-
-        Args:
-            Res (dict): dictionary with edge->resistance
-            nu (df.expr): 1d viscosity
-        '''
-
-        ## Init a as list of lists        
-        a = [[ 0 for i in range(0, len(self.qp))  ] for j in range(0, len(self.qp))]
-
-        a = self.add_form_edges(a)
-        a = self.add_form_bifs(a)
-
-        return a
-
 
 
 ### ------------- Tests ------------ ###

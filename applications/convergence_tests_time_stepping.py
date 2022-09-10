@@ -15,11 +15,8 @@ def convergence_test_stokes(t_step_scheme, t_steps=10, T = 1, bifurcations=0):
         t_steps (int): number of time steps
         bifurcations (int): number of bifurcations
     '''
-
-    fluid_params = {'rho':1, 'nu':1}
-    rho = fluid_params['rho']
-    mu = rho*fluid_params['nu']
-    fluid_params["mu"] = mu
+    nu, rho = 1, 1
+    mu = rho*nu
 
     res = 1
     Ainv = 1

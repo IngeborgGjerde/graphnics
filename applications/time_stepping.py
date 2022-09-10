@@ -26,8 +26,8 @@ def time_stepping_stokes(model, rho=Constant(1), t_steps=10, T=1, qp_n=None, t_s
     if qp_n is None: qp_n = ii_Function(model.W) # initialize as zero
     
     # split out the components
-    qs = model.qp[0:model.G.num_edges]
-    vs = model.vphi[0:model.G.num_edges]
+    qs = model.qp[:model.G.num_edges]
+    vs = model.vphi[:model.G.num_edges]
 
     dt = T/t_steps
     
@@ -53,21 +53,25 @@ def time_stepping_stokes(model, rho=Constant(1), t_steps=10, T=1, qp_n=None, t_s
 
     qps = [qp_0]
 
-    a = model.a_form()
+    a_diag = model.diag_a_form_on_edges()
+    a_offdiag = model.offdiag_a_form_on_edges()
+    a_bif = model.a_form_on_bifs()
     L = model.L_form()
+
+    B = ii_convert(ii_assemble(a_offdiag)) # not time dependent
+    C = ii_convert(ii_assemble(a_bif)) # not time dependent
 
     # Update f and n to next time step
     model.f.t, model.p_bc.t = 0, 0
-    An, Ln, DDn = [ii_convert(ii_assemble(term)) for term in [a, L, Dn]]
+    An, Ln, DDn = [ii_convert(ii_assemble(term)) for term in [a_diag, L, Dn]]
     
     model.f.t, model.p_bc.t = dt, dt
-    An1, Ln1, DDn1 = [ii_convert(ii_assemble(term)) for term in [a, L, Dn1]]
+    An1, Ln1, DDn1 = [ii_convert(ii_assemble(term)) for term in [a_diag, L, Dn1]]
 
     for t in np.linspace(dt, T, t_steps-1):
-        print(t)
 
-        A = ii_convert( DDn1 + cn1*dt*An1 ) 
-        b = ii_convert( DDn  + cn1*dt*Ln1 - dt*cn*An*qp_n.vector() + dt*cn*Ln )
+        A = ii_convert( DDn1 + cn1*dt*An1 + cn1*dt*B + cn1*dt*C) 
+        b = ii_convert( DDn  + cn1*dt*Ln1 - dt*cn*An*   qp_n.vector() - dt*cn*B*qp_n.vector() - cn*dt*C*qp_n.vector() + dt*cn*Ln )
 
         sol = ii_Function(model.W)  
         solver = LUSolver(A, 'mumps')
@@ -84,6 +88,7 @@ def time_stepping_stokes(model, rho=Constant(1), t_steps=10, T=1, qp_n=None, t_s
         DDn = ii_convert(DDn1*qp_n.vector())
         
         model.f.t, model.p_bc.t = t+dt, t+dt
-        An1, Ln1, DDn1 = [ii_convert(ii_assemble(term)) for term in [a, L, Dn1]]
+
+        An1, Ln1, DDn1 = [ii_convert(ii_assemble(term)) for term in [a_diag, L, Dn1]]
         
     return qps

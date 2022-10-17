@@ -22,7 +22,7 @@ class HydraulicNetwork:
         p_bc (df.expr): pressure boundary condition
     '''
     
-    def __init__(self, G, Res=None, f=Constant(0), p_bc=Constant(0)):
+    def __init__(self, G, f=Constant(0), p_bc=Constant(0)):
         '''
         Set up function spaces and store model parameters f and ns
         '''
@@ -32,9 +32,6 @@ class HydraulicNetwork:
 
         # Model parameters
 
-        if Res is None:
-            Res = { e:Constant(1) for e in self.G.edges() }
-        self.Res = Res
         self.f = f
         self.p_bc = p_bc
 
@@ -57,7 +54,7 @@ class HydraulicNetwork:
         # Trial and test functions
         self.qp = list(map(TrialFunction, W))
         self.vphi = list(map(TestFunction, W))
-            
+     
 
     def diag_a_form_on_edges(self, a=None):
         '''
@@ -78,7 +75,7 @@ class HydraulicNetwork:
         for i, e in enumerate(G.edges):
             dx_edge = Measure("dx", domain = G.edges[e]['submesh'])
     
-            a[i][i] += self.Res[e]*qs[i]*vs[i]*dx_edge 
+            a[i][i] += self.G.edges()[e]["Res"]*qs[i]*vs[i]*dx_edge 
         
         return a
 
@@ -224,6 +221,31 @@ class HydraulicNetwork:
         
         return L
 
+    def B_form_eigval(self):
+        '''
+        The right-hand side linear form
+        '''
+        
+        a = self.init_a_form()
+        qp, vphi = self.qp, self.vphi
+        G = self.G
+        
+        # split out the components
+        n_edges = G.num_edges
+
+        qs, vs = qp[:n_edges], vphi[:n_edges]
+        
+        # edge contributions to form
+        for i, e in enumerate(G.edges):
+            dx_edge = Measure("dx", domain = G.edges[e]['submesh'])
+    
+            a[i][i] += qs[i]*vs[i]*dx_edge 
+       
+        a[n_edges][n_edges] += qp[n_edges]*vphi[n_edges]*dx 
+        
+        return a
+
+
 
 
 
@@ -243,9 +265,9 @@ class NetworkStokes(HydraulicNetwork):
         p_bc (df.expr): pressure boundary condition
     '''
 
-    def __init__(self, G, Res=None, mu=Constant(1), f=Constant(0), p_bc=Constant(0)):
+    def __init__(self, G, mu=Constant(1), f=Constant(0), p_bc=Constant(0)):
         self.mu =mu
-        super().__init__(G, Res, f, p_bc)
+        super().__init__(G, f, p_bc)
 
     def diag_a_form_on_edges(self, a=None):
         '''

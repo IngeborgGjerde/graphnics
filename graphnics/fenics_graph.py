@@ -281,7 +281,17 @@ class FenicsGraph(nx.DiGraph):
             ip -= qs[edge_ix]*xi*ds_edge(BIF_OUT)
 
         return ip
+    
+    def get_num_inlets_outlets(self):
+        num_inlets, num_outlets = 0, 0
 
+        for e in self.edges():
+            vf_vals = self.edges[e]['vf'].array()
+            
+            num_inlets += len(list(np.where(vf_vals==BOUN_IN)[0]))
+            num_outlets += len(list(np.where(vf_vals==BOUN_OUT)[0]))
+        
+        return num_inlets, num_outlets
 
 
 class GlobalFlux(UserExpression):

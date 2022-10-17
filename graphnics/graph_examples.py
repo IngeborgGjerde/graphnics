@@ -1,6 +1,6 @@
 
 import networkx as nx
-from .fenics_graph import *
+from fenics_graph import *
 
 def make_line_graph(n, dim=2):
     '''
@@ -38,7 +38,9 @@ def honeycomb(n,m):
     
     G.add_node(len(G.nodes))
     G.nodes[len(G.nodes)-1]['pos']=[0,-1]
-    G.add_edge(len(G.nodes)-1,0)
+    G.add_edge(len(G.nodes)-1, 0)
+    
+    inlet_node = len(G.nodes)-1
 
     # Add outlet
     # We want it positioned at the top right of the mesh
@@ -54,7 +56,13 @@ def honeycomb(n,m):
     G.add_edge(len(G.nodes)-1, furthest_node_ix)
 
     G = copy_from_nx_graph(G)
-    #G.make_mesh()
+    
+    # Usually the inlet edge is oriented outwards, we want it inwards
+    if (0, inlet_node) in G.edges():
+        G.remove_edge(0, inlet_node)
+        G.add_edge(inlet_node, 0)
+    
+    G.make_mesh()
     return G
 
 

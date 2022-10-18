@@ -3,7 +3,7 @@
 This is a repo for experimenting with using `networkx` to make graph meshes and solve equations on these in `FEniCS`. 
 
 ## Installation
-We use `networkx` combined with the mixed-dimensional library [`fenics_ii`](https://github.com/MiroK/fenics_ii)
+We use `networkx` combined with the mixed-dimensional library [`fenics_ii`](https://github.com/MiroK/fenics_ii) created by Miroslav Kuchta. 
 
 The environment is provided as a docker container. The container can be built and run locally by executing
 
@@ -25,6 +25,10 @@ docker logs networkfenics
 and enter the html-links it provides in your browser.
 
 [<img alt="alt_text" width="400px" src="pial-network.png" />]([https://www.google.com/](https://github.com/IngeborgGjerde/fenics-networks/pial-network.png?raw=true))
+
+## License
+
+For the time being this code is under a GNU General Public License, so please be sure to give due credit if you reuse it to a significant degree.
 
 ## Citing
 

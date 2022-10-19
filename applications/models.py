@@ -7,6 +7,9 @@ sys.path.append('../')
 from graphnics import *
 
 
+TH = {'flux_space': 'CG', 'flux_degree': 2, 'pressure_space': 'CG', 'pressure_degree': 1}
+RT = {'flux_space': 'CG', 'flux_degree': 1, 'pressure_space': 'DG', 'pressure_degree': 0}
+
 class HydraulicNetwork:
     '''
     Bilinear forms a and L for the hydraulic equations
@@ -22,7 +25,7 @@ class HydraulicNetwork:
         p_bc (df.expr): pressure boundary condition
     '''
     
-    def __init__(self, G, f=Constant(0), p_bc=Constant(0)):
+    def __init__(self, G, f=Constant(0), p_bc=Constant(0), space=RT):
         '''
         Set up function spaces and store model parameters f and ns
         '''
@@ -41,8 +44,8 @@ class HydraulicNetwork:
         # - real space on each bifurcation
         submeshes = list(nx.get_edge_attributes(G, 'submesh').values())
 
-        P2s = [FunctionSpace(msh, 'CG', 2) for msh in submeshes] 
-        P1s = [FunctionSpace(G.global_mesh, 'CG', 1)] 
+        P2s = [FunctionSpace(msh, space['flux_space'], space['flux_degree']) for msh in submeshes] 
+        P1s = [FunctionSpace(G.global_mesh, space['pressure_space'], space['pressure_degree'])] 
         LMs = [FunctionSpace(G.global_mesh, 'R', 0) for b in G.bifurcation_ixs]
 
         ### Function spaces
@@ -265,9 +268,9 @@ class NetworkStokes(HydraulicNetwork):
         p_bc (df.expr): pressure boundary condition
     '''
 
-    def __init__(self, G, mu=Constant(1), f=Constant(0), p_bc=Constant(0)):
+    def __init__(self, G, mu=Constant(1), f=Constant(0), p_bc=Constant(0), space=TH):
         self.mu =mu
-        super().__init__(G, f, p_bc)
+        super().__init__(G, f, p_bc, space)
 
     def diag_a_form_on_edges(self, a=None):
         '''
@@ -345,7 +348,7 @@ def test_mass_conservation():
 
 
 
-def convergence_test_stokes(bifurcations=1):
+def spatial_convergence_test_stokes(bifurcations=1):
     ''''
     Test approximation of steady state reduced stokes against analytic solution
     '''
@@ -438,4 +441,4 @@ def convergence_test_stokes(bifurcations=1):
 if __name__ == '__main__':
     
     #test_mass_conservation()
-    convergence_test_stokes()
+    spatial_convergence_test_stokes()

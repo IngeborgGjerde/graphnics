@@ -25,11 +25,3 @@ docker logs networkfenics
 and enter the html-links it provides in your browser.
 
 [<img alt="alt_text" width="400px" src="pial-network.png" />]([https://www.google.com/](https://github.com/IngeborgGjerde/fenics-networks/pial-network.png?raw=true))
-
-## License
-
-For the time being this code is under a GNU General Public License, so please be sure to give due credit if you reuse it to a significant degree.
-
-## Citing
-
-The manuscript corresponding to this repo is currently in preparation. Feel free to contact me if you would like to read the manuscript. If you use this repo for your own work you can cite the placeholder *Network model for perivascular fluid flow driven by vasomotion* (in preparation) by Ingeborg Gjerde, Marie Rognes and Barbara Wohlmuth. 

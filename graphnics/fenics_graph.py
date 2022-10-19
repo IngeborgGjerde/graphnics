@@ -18,8 +18,6 @@ BIF_OUT = 2
 BOUN_IN = 3
 BOUN_OUT = 4
 
-
-
 class FenicsGraph(nx.DiGraph):
     '''
     Make fenics mesh from networkx directed graph
@@ -205,8 +203,10 @@ class FenicsGraph(nx.DiGraph):
         '''
         
         for u,v in self.edges():
-            tangent = np.asarray(self.nodes[v]['pos'])-np.asarray(self.nodes[u]['pos'])
-            tangent *= 1/np.linalg.norm(tangent)
+            tangent = np.asarray(self.nodes[v]['pos'])-np.asarray(self.nodes[u]['pos'], dtype=np.float64)
+            tangent_norm = np.linalg.norm(tangent)
+            tangent_norm_inv = 1.0/tangent_norm
+            tangent *= tangent_norm_inv
             self.edges[u,v]['tangent'] = tangent
         self.tangents = list( nx.get_edge_attributes(self, 'tangent').items() )
 

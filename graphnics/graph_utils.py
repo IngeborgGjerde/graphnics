@@ -1,6 +1,7 @@
 from fenics import *
 import networkx as nx
 import numpy as np
+from graphnics import *
 
 def assign_radius_using_Murrays_law(G, start_node,  start_radius):
     '''
@@ -137,7 +138,6 @@ class DistFromSource(UserExpression):
 def test_dist_from_source():
     
     # Test on simple line graph
-    from graph_examples import make_line_graph
     G = make_line_graph(10)
 
     dist_from_source = DistFromSource(G, 0, degree=2)
@@ -152,8 +152,7 @@ def test_dist_from_source():
     
     
     # Check on a double Y bifurcation
-    from graph_examples import make_double_Y_bifurcation
-    G = make_double_Y_bifurcation()
+    G  = make_double_Y_bifurcation()
 
     dist_from_source = DistFromSource(G, 0, degree=2)
     
@@ -173,7 +172,6 @@ def test_dist_from_source():
 
 def test_Murrays_law_on_double_bifurcation():
     
-    from graph_examples import make_double_Y_bifurcation
     G = make_double_Y_bifurcation()
 
     G = assign_radius_using_Murrays_law(G, start_node=0, start_radius=1)

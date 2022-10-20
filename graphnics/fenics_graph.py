@@ -383,27 +383,4 @@ def copy_from_nx_graph(G_nx):
         G.add_edge(u,v)
     return G
 
-
-def test_fenics_graph():
-    # Make simple y-bifurcation
-
-    G = FenicsGraph()
-    from graph_examples import make_Y_bifurcation
-    G = make_Y_bifurcation()
-    G.make_mesh()
-    mesh = G.global_mesh
-
-    # Check that all the mesh coordinates are also
-    # vertex coordinates in the graph
-    mesh_c = mesh.coordinates()
-    for n in G.nodes:
-        vertex_c = G.nodes[n]['pos']
-        vertex_ix = np.where((mesh_c == vertex_c).all(axis=1))[0]
-        assert len(vertex_ix)==1, 'vertex coordinate is not a mesh coordinate'
-        
-        
-
-if __name__ == '__main__':
-    test_fenics_graph()
-
     

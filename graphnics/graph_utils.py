@@ -1,7 +1,118 @@
 from fenics import *
 import networkx as nx
 import numpy as np
+import sys
+sys.path.append('../') 
 from graphnics import *
+
+
+# TODO: This function could benefit from further testing
+
+def color_graph(G):
+    '''
+    Args:
+        G: networkx graph
+        
+    Colors the branches of a graph and stores the color (an int) as an edge variable.
+    
+    The graph colors can be displayed for 2d plots using
+    >> plot_graph_color(G)
+    
+    '''
+    
+    G_disconn = G.copy(as_view=False)
+    G_disconn = nx.Graph(G_disconn)
+    
+    G_undir = nx.Graph(G)
+    
+    C = nx.adj_matrix(nx.Graph(G))
+    num_vertex_conns = np.asarray(np.sum(C, axis=1)).flatten()
+    bifurcation_points = np.where( num_vertex_conns>2)[0].tolist()
+    
+    # To compute the branches we remove disconnect the edges meeting at a bifurcation point
+    # For a bifurcation point b we create n new vertex copies b0 b1 b2 and connect each edge to 
+    # different vertex copies
+    # We store the result in G_disconn
+
+    for b in bifurcation_points:
+        for i, e in enumerate(G_undir.edges(b)):
+            
+            # get the other node v2 connected to this edge
+            vertex_list = list(e)
+            vertex_list.remove(b)
+            v2 = vertex_list[0]
+
+            # we mark the new bifurcation vertex as 'b 0', 'b 1', ... etc
+            new_bif_vertex = f'{b} {v2}'
+            G_disconn.add_node(new_bif_vertex)
+            G_disconn.nodes()[new_bif_vertex]['pos'] = G_undir.nodes()[b]['pos']
+            
+            G_disconn.add_edge(new_bif_vertex, v2) # a new disconnected edge
+
+            # Remove the old edge
+            try: 
+                # some edges consist of two bifurcation points, attempting to remove
+                # it twice raises an error
+                G_disconn.remove_edge(e[0], e[1])
+            except:
+                # sanity check: this should only be needed for edges consisting of two bpoints
+                for v_e in e:
+                    assert v_e in bifurcation_points, 'Graph coloring algorithm may be malfunctioning'
+                
+                
+    # From G_disconn we can get the disconnected subgraphs that each contain a branch
+    subG = list(G_disconn.subgraph(c) for c in nx.connected_components(G_disconn))
+    
+    # Iterating over each subgraph we mark the edges with the branch number
+    n_branches = 0
+    
+    for sG in subG:
+        C = nx.adj_matrix(sG)
+        num_vertex_conns = np.asarray(np.sum(C, axis=1)).flatten()
+        
+        #assert np.max(num_vertex_conns) < 3, 'subgraph contains a bifurcation when it should not'
+        
+        is_disconn_graph = np.min(num_vertex_conns) > 0 # some subgraphs are just points, no need to count those
+        is_disconn_graph = is_disconn_graph and np.max(num_vertex_conns)<3
+        
+        if is_disconn_graph:
+            for e in sG.edges():
+                v1 = str(e[0]).split(' ')[0]
+                v2 = str(e[1]).split(' ')[0]
+                
+                # the graph G might be directed, so we look for (v1, v2) and (v2, v1)
+                orig_e1 = (int(v1), int(v2))
+                orig_e2 = (int(v2), int(v1))
+                try:
+                    G.edges()[orig_e1]['color'] = n_branches
+                except:
+                    G.edges()[orig_e2]['color'] = n_branches
+            
+            n_branches += 1
+            
+            
+    # NOTE: One weakness of the above algorithm is that it does not color edges between two bifurcation points
+    # so we have to color those manually at the end
+    for e in G.edges():
+        if 'color' not in G.edges()[e]:
+            G.edges()[e]['color'] = n_branches
+            n_branches += 1
+
+def plot_graph_color(G):
+    '''
+    Plots the graph colorings stored as the edge dict entry 'color'
+    '''
+    
+    pos=nx.get_node_attributes(G,'pos')
+    
+    colors = nx.get_edge_attributes(G,'color')
+    nx.draw_networkx_edge_labels(G, pos, colors)
+
+    nx.draw_networkx(G, pos)
+    colors = list(nx.get_edge_attributes(G, 'color').values())
+
+
+
 
 def assign_radius_using_Murrays_law(G, start_node,  start_radius):
     '''

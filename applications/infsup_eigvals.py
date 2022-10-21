@@ -5,11 +5,10 @@ from xii import *
 import sys
 sys.path.append('../') 
 from graphnics import *
-import models
 
 from slepc4py import SLEPc
 
-class HydraulicNetwork_EP(models.HydraulicNetwork):
+class HydraulicNetwork_EP(HydraulicNetwork):
     '''
     Bilinear forms a and L for the hydraulic equations
             Res*q + d/ds p = g
@@ -53,7 +52,7 @@ class HydraulicNetwork_EP(models.HydraulicNetwork):
         return a
 
 
-class NetworkStokes_EP(models.NetworkStokes):
+class NetworkStokes_EP(NetworkStokes):
     '''
     Bilinear forms a and L for the hydraulic equations
             Res*q + d/ds p = g

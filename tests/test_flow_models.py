@@ -54,12 +54,12 @@ def test_mass_conservation():
 
 
 
-def spatial_convergence_test_stokes(bifurcations=1):
+def test_network_stokes():
     ''''
-    Test approximation of steady state reduced stokes against analytic solution
+    Test network stokes model against manufacture solution on single edge graph
     '''
 
-    # Model parameters
+    # We check with parameters that are not one
     rho = 10
     nu = 2
     mu = rho*nu
@@ -79,50 +79,39 @@ def spatial_convergence_test_stokes(bifurcations=1):
     
     ns = mu*Ainv*q.diff(x)-p # Normal stress
     
-    print('Analytic solutions')
-    print('q =', sym.printing.latex(q))
-    print('p =', sym.printing.latex(p))
-    print('f =', sym.printing.latex(f))
-    
+    # convert to fenics expressions
     f, q, p, ns = [Expression(sym.printing.ccode(func), degree=2) for func in [f, q, p, ns]]
-
-    # Solve on increasingly fine meshes and record errors
-    print('*********************************')
-    print('h       ||q_e||_L2  ||p_e||_L2   ')
-    print('*********************************')
-    for N in [1, 2, 3, 4, 5]:
-        
-        G = make_line_graph(bifurcations+2)
-        G.make_mesh(N)
-
-        prop_dict = {key: { 'Res':Constant(Res),'Ainv':Constant(Ainv)} for key in list(G.edges.keys())}
-        nx.set_edge_attributes(G, prop_dict)
     
-        model = NetworkStokes(G, f=f, p_bc = ns, mu=Constant(mu))
+    # Solve on graph with single edge
+    G = make_line_graph(2)
+    G.make_mesh(10)
+
+    prop_dict = {key: { 'Res':Constant(Res),'Ainv':Constant(Ainv)} for key in list(G.edges.keys())}
+    nx.set_edge_attributes(G, prop_dict)
+
+    model = NetworkStokes(G, f=f, p_bc = ns, mu=Constant(mu))
     
-        qp_n = ii_Function(model.W)
-        qp_a = [q]*G.num_edges + [p] + [ns]*G.num_bifurcations
+    A = ii_convert(ii_assemble(model.a_form()))
+    L = model.L_form()
+    b = ii_assemble(L)
+    b = ii_convert(b)
+    b = ii_convert(ii_assemble(model.L_form()))
 
-        for i, func in enumerate(qp_a):
-            qp_n[i].vector()[:] = interpolate(func, model.W[i]).vector().get_local()
+    sol = ii_Function(model.W)  
+    solver = LUSolver(A, 'mumps')
+    solver.solve(sol.vector(), b)
 
-        A = ii_convert(ii_assemble(model.a_form()))
-        b = ii_convert(ii_assemble(model.L_form()))
-        A, b = [ii_convert(ii_assemble(term)) for term in [model.a_form(), model.L_form()]]
-        
-        sol = ii_Function(model.W)  
-        solver = LUSolver(A, 'mumps')
-        solver.solve(sol.vector(), b)
-
-        qhs, ph = sol[:G.num_edges], sol[G.num_edges]
-
-        # Compute and print errors
-        pa = interpolate(p, FunctionSpace(G.global_mesh, 'CG', 2))
-        p_error = errornorm(ph, pa)
-        q_error = 0
-        print(G.edges())
-        for i, e in enumerate(G.edges()):
-            qa = interpolate(q, FunctionSpace(G.edges[e]["submesh"], 'CG', 3))
-            q_error += errornorm(qhs[i], qa)
-            
-        print(f'{G.global_mesh.hmin():1.3f}  &  {q_error:1.2e}  &   {p_error:1.2e}')
+    qh, ph = sol
+    
+    # Compute and print errors
+    pa = interpolate(p, FunctionSpace(G.global_mesh, 'CG', 2))
+    p_error = errornorm(ph, pa)
+    
+    qa = interpolate(q, FunctionSpace(G.global_mesh, 'CG', 3))
+    q_error = errornorm(qh, qa)
+    
+    assert q_error < 1e-4, 'Network Stokes model not giving correct flux'
+    assert p_error < 1e-4, 'Network Stokes model not giving correct pressure'
+    
+if __name__ == '__main__':
+    test_network_stokes()

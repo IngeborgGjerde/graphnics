@@ -6,8 +6,6 @@ sys.path.append('../')
 from graphnics import *
 
 
-# TODO: This function could benefit from further testing
-
 def color_graph(G):
     '''
     Args:
@@ -184,7 +182,7 @@ def assign_radius_using_Murrays_law(G, start_node,  start_radius):
             if sub_graph_lengths[str(v2)] is 0: # terminal edge
                 fraction = 1/len(sub_graphs[str(v1)].edges())
                 
-            
+                
             # Now n*radius_dn**3 = radius_p**3 -> radius_dn = (1/n)**(1/3) radius_p
             radius_d = (fraction)**(1/3)*radius_p
             G_.edges()[e]['radius']=radius_d
@@ -223,9 +221,9 @@ class DistFromSource(UserExpression):
         mesh = G.make_mesh(store_mesh = False, n=0) # we don't want to overwrite a pre-existing mesh
         
         V = FunctionSpace(mesh, 'CG', 1)
-        dist_func = Function(V)
-    
-
+        dist_func = Function(V)  
+        
+          
         # The vertices of the mesh are ordered like the nodes of the graph
         dofmap = list(dof_to_vertex_map(V)) # for going from mesh vertex to dof
         
@@ -242,65 +240,13 @@ class DistFromSource(UserExpression):
         # Query the CG-1 dist_func 
         values[0] = self.dist_func(x)
         
-        
-        
-        
-        
-def test_dist_from_source():
+
+class Pressure_Drop(DistFromSource):
     
-    # Test on simple line graph
-    G = make_line_graph(10)
-
-    dist_from_source = DistFromSource(G, 0, degree=2)
-    V = FunctionSpace(G.global_mesh, 'CG', 1)
-    dist_from_source_i = interpolate(dist_from_source, V)
-
-    coords = V.tabulate_dof_coordinates()
-    lengths = np.linalg.norm(coords, axis=1)
-
-    discrepancy = np.linalg.norm(np.asarray(dist_from_source_i.vector().get_local()) - np.asarray(lengths))
-    assert near(discrepancy, 0)
-    
-    
-    # Check on a double Y bifurcation
-    G  = make_double_Y_bifurcation()
-
-    dist_from_source = DistFromSource(G, 0, degree=2)
-    
-    source = 0
-    
-    for node in [3, 4, 5]:
-        path = nx.shortest_path(G, source, node)[1:]
+    def __init__(self, G, source_node, delta_p, **kwargs):
+        self.delta_p = delta_p
+        super().__init__(G, source_node, **kwargs)    
         
-        v1 = source
-        dist = 0
-        for v2 in path:
-            dist += G.edges()[(v1, v2)]["length"]         
-            v1 = v2
-        assert near(dist_from_source(G.nodes()[node]['pos']), dist), f'Distance not computed correctly for node {node}'
-
-
-
-def test_Murrays_law_on_double_bifurcation():
-    
-    G = make_double_Y_bifurcation()
-
-    G = assign_radius_using_Murrays_law(G, start_node=0, start_radius=1)
-        
-    for v in G.nodes():
-        es_in = list(G.in_edges(v))
-        es_out = list(G.out_edges(v))
-        
-        # no need to check terminal edges
-        if len(es_out) is 0 or len(es_in) is 0: continue 
-        
-        r_p_cubed, r_d_cubed = 0, 0
-        for e_in in es_in:
-            r_p_cubed += G.edges()[e_in]['radius']**3
-        for e_out in es_out:
-            r_d_cubed += G.edges()[e_out]['radius']**3
-        
-        print(v, r_p_cubed, r_d_cubed)
-        
-        assert near(r_p_cubed, r_d_cubed, 1e-6), 'Murrays law not satisfied'
-    return G
+    def eval(self, values, x):        
+        # Query the CG-1 dist_func 
+        values[0] = self.delta_p*self.dist_func(x)

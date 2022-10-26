@@ -228,11 +228,14 @@ class DistFromSource(UserExpression):
         dofmap = list(dof_to_vertex_map(V)) # for going from mesh vertex to dof
         
         # Input nodal values in dist_func 
+        print(dist)
         for n in G.nodes():
             dof_ix = dofmap.index(n)
+            print(dof_ix)
             dist_func.vector()[dof_ix] = dist[n]
         
         # Assign dist_func as a class variable and query it in eval
+        dist_func.set_allow_extrapolation(True)
         self.dist_func = dist_func
         
         
@@ -250,3 +253,26 @@ class Pressure_Drop(DistFromSource):
     def eval(self, values, x):        
         # Query the CG-1 dist_func 
         values[0] = self.delta_p*self.dist_func(x)
+        
+        
+
+class Vasomotion(DistFromSource):
+    
+    def __init__(self, G, source_node, w, k, t, radius1_0, gamma, **kwargs):
+        self.w = w
+        self.k = k
+        self.t = t
+        self.gamma=gamma
+        self.radius1_0 = radius1_0
+        super().__init__(G, source_node, **kwargs)    
+        
+    def eval(self, values, x):        
+        # Query the CG-1 dist_func 
+        dist = self.dist_func(x)
+        Psi = sin(self.k*dist-self.w*self.t)
+        Psi_dt = -self.w*cos(self.k*dist-self.w*self.t)
+
+        radius1 = self.radius1_0*(1+self.gamma*Psi)
+        
+        values[0] = 2.0*np.pi*self.radius1_0*self.gamma*Psi_dt*radius1
+    

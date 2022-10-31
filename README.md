@@ -1,6 +1,14 @@
 # Implementing network models in FEniCS
 
-This is a repo for experimenting with using `networkx` to make graph meshes and solve equations on these in `FEniCS`. 
+The `graphnics` library solves network models using the finite element method. This is facilitated via the `FenicsGraph` class which is an extension of the `DiGraph` class in `networkx`. 
+ 
+
+[<img alt="alt_text" width="300px" src="pial-network.png" />]([https://www.google.com/](https://github.com/IngeborgGjerde/fenics-networks/pial-network.png?raw=true))
+
+## Demos
+
+- [Introduction to `Graphnics`](https://github.com/IngeborgGjerde/graphnics/blob/main/demo/Graphnics%20demo.ipynb).
+- [Solving coupled 3d-1d network models](https://github.com/IngeborgGjerde/graphnics/blob/main/demo/Coupled%201d-3d.ipynb) using `fenics_ii`
 
 ## Installation
 We use `networkx` combined with the mixed-dimensional library [`fenics_ii`](https://github.com/MiroK/fenics_ii) created by Miroslav Kuchta. 
@@ -24,4 +32,6 @@ docker logs networkfenics
 ```
 and enter the html-links it provides in your browser.
 
-[<img alt="alt_text" width="400px" src="pial-network.png" />]([https://www.google.com/](https://github.com/IngeborgGjerde/fenics-networks/pial-network.png?raw=true))
+## Paper 
+
+This code is currently being prepared for submission to JOSS. The paper draft can be found [here.](https://github.com/IngeborgGjerde/graphnics/blob/main/paper/joss.md)

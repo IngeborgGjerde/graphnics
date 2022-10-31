@@ -18,34 +18,25 @@ link-citations: true
 ---
 
 # Summary
-
 Network models facilitate inexpensive simulations, but require careful
 handling of bifurcation conditions. In this software we combine
-`networkx` [@hagberg2008exploring] and `FEniCS`
-[@AlnaesBlechta2015a] into the `graphnics` library, which
+`networkx` (Hagberg et.al. 2008) and `FEniCS`
+(Logg et.al. 2012) into the `graphnics` library, which
 offers
-
--   A `FenicsGraph` class built on top of the `DiGraph` class in `networkx`, that constructs a global mesh for a network and
-    provides `FEniCS` mesh functions describing how they
-    relate to the graph structure.
-
+-   A `FenicsGraph` class built on top of the `DiGraph` class in `networkx`, that constructs a global mesh for a network and provides `FEniCS` mesh functions describing how they relate to the graph structure.
 -   Example models showing how the `FenicsGraph` class can be used to
     assemble and solve different network flow models.
+The example models are implemented using `fenics_ii` (Kuchta 2019) as this allows for assembling also coupled 1D-3D flow models. The code used for the assembly of the system can be  directly translated to use different flavours of `FEniCS`, using e.g. the mixed-dimensional branch of `FEniCS` (Daversin-Catty et.al. 2021)
 
-The example models are implemented using
-`fenics_ii` [@kuchta2021assembly] and the
-mixed-dimensional branch of [FEniCS]{.smallcaps}
-[@daversincatty2019abstractions]. Only minor adaptions to the code are
-necessary to convert between the two.
+
 
 
 # Statement of need
-`FEniCS` [@AlnaesBlechta2015a] provides high-level
+`FEniCS` (Logg et.al. 2012) provides high-level
 functionality for specifying variational forms. This allows the user to
 focus on the model they are solving rather than implementational
 details. A key component of network models is the correct handling of
-bifurcation conditions, one being that there should be no jump in the
-cross-section flux (i.e. conversation of mass at junctions).
+bifurcation conditions. A natural bifurcation condition is the conservation of mass at junctions, meaning that there should be no jump in the cross-section flux.
 `FEniCS` implicitly assumes that each vertex is connected to
 two cells. At bifurcation vertices in a network, however, the vertex is
 connected to three or more cells. Thus one cannot use the jump operator
@@ -109,11 +100,10 @@ is a Lagrange multiplier used to impose conservation of mass at each bifurcation
 
 # Software
 
-The `FenicsGraph` class 
------------------------
+## The `FenicsGraph` class
 
 The main component of `graphnics` is the `FenicsGraph`
-class, which inherts from the `networkx` `DiGraph` class.
+class, which inherits from the `DiGraph` class in `networkx`.
 The `FenicsGraph` class provides a function for meshing the network;
 meshfunctions are used to relate the graph structure to the cells and
 vertices in the mesh. Tangent vectors $\boldsymbol{\tau}_i$ are computed
@@ -121,31 +111,65 @@ for each edge and stored as edge attributes for the network. This is
 then used in a convenience class function **dds$\_$i** which returns the
 spatial derivative $\partial_s f_i = \nabla f_i \cdot \boldsymbol{\tau}_i$ on the edge.
 
-Network models
---------------
+## Network models
 
-`graphnics` can further be used to create and solve network flow model.
-If the problem is posed in terms of global variables this can be done using standard methods in
-`FEniCS`; this is demoed in the NetworkPoisson model. For
-problems that are posed in terms of edge and vertex variables, the edge
-and vertex iterators in `networkx` are used to assemble
-their contributions to the block matrix. This is demoed in the
-`HydraulicNetwork` and `NetworkStokes` model classes.
+`graphnics` can further be used to create and solve network flow models.
+If the problem is posed in terms of global variables this can be done using standard methods in `FEniCS`; this is demoed in the `NetworkPoisson` model. For
+problems that are posed in terms of edge and vertex variables, the graph iterators in `networkx` can be used to add their contributions to the block matrix. This is demoed in the `HydraulicNetwork` and `NetworkStokes` model classes.
 
 <p float="left">
 <img src="pial_pressure.png" alt="drawing" width="420"/>
 <img src="pial_flux.png" alt="drawing" width="400"/>
 </p>
-<figcaption> Figure 1: Simulation of fluid flow in the pial blood vessel network of a rodent [@topological-kleinfeld]. The network consists of 417 edges and 389 vertices, of which 320 are bifurcation points. The pressure (a) and cross-section flux (b) were computed using the hydraulic network model. A linear pressure drop was ascribed from inlet to outlets using `PressureDrop`.
-
+<figcaption> Figure 1: Simulation of fluid flow in the pial blood vessel network of a rodent (Blinder et. al. 2010). The network consists of 417 edges and 389 vertices, of which 320 are bifurcation points. The pressure (a) and cross-section flux (b) were computed using the hydraulic network model.
  </figcaption>
 
 
-Acknowledgments
-===============
+# Acknowledgments
 
 We thank Miroslav Kuchta, Cecile Daversin-Catty and Jørgen Dokken for
 their input on the implementation, and Pablo Blinder and David Kleinfeld
 for sharing data for the pial vasculature of rodents.
 
-## References
+# References
+
+<div id="refs" class="references csl-bib-body hanging-indent">
+<div id="ref-networkx" class="csl-entry">
+
+Aric Hagberg and Pieter Swart and Daniel S. Chult. (2008). *Exploring network structure, dynamics, and function using NetworkX*. 
+
+</div>
+</div>
+
+<div id="refs" class="references csl-bib-body hanging-indent">
+<div id="ref-fenics-book" class="csl-entry">
+
+Anders Logg, Kent-Andre Mardal and Garth Wells. (2012). *Automated solution of differential equations by the finite element method: The FEniCS book*. Springer Science & Business Media, 84. 
+
+</div>
+</div>
+
+<div id="refs" class="references csl-bib-body hanging-indent">
+<div id="ref-networkx" class="csl-entry">
+
+Miroslav Kuchta (2019). *Assembly of multiscale linear PDE operators*. Numerical Mathematics and Advanced Applications ENUMATH, p. 641-650.
+
+</div>
+</div>
+
+<div id="refs" class="references csl-bib-body hanging-indent">
+<div id="ref-abstractions2021" class="csl-entry">
+
+Cecile Daversin-Catty, Chris N. Richardson, Ada Johanne Ellingsrud and Marie E. Rognes. (2021). *Abstractions and automated algorithms for mixed-dimensional finite element methods*. ACM Transactions on Mathematical Software (TOMS)
+
+</div>
+</div>
+
+
+<div id="refs" class="references csl-bib-body hanging-indent">
+<div id="ref-networkx" class="csl-entry">
+
+Pablo Blinder, Andy Y. Shih, Christopher Rafie and David Kleinfeld (2010). *Topological basis for the robust distribution of blood to rodent neocortex*. Proceedings of the National Academy of Sciences 107(28) p. 12670-12675
+
+</div>
+</div>

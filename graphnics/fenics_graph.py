@@ -3,9 +3,9 @@ import numpy as np
 from fenics import *
 from xii import *
 
-'''
+"""
 The Graphnics class constructs fenics meshes from networkx directed graphs.
-'''
+"""
 
 # Marker tags for inward/outward pointing bifurcation nodes and boundary nodes
 BIF_IN = 1
@@ -13,8 +13,9 @@ BIF_OUT = 2
 BOUN_IN = 3
 BOUN_OUT = 4
 
+
 class FenicsGraph(nx.DiGraph):
-    '''
+    """
     Make fenics mesh from networkx directed graph
 
     Attributes:
@@ -25,35 +26,32 @@ class FenicsGraph(nx.DiGraph):
         mf (df.function): 1d meshfunction that maps cell->edge number
         vf (df.function): 0d meshfunction on  edges[i].mesh that stores bifurcation and boundary point data
         num_edges (int): number of edges in graph
-    '''
-
+    """
 
     def __init__(self):
         nx.DiGraph.__init__(self)
 
-        self.global_mesh = None # global mesh for all the edges in the graph
+        self.global_mesh = None
 
-
-    def make_mesh(self, n=1): 
-        '''
+    def make_mesh(self, n=1, store_mesh=True):
+        """
         Makes a fenics mesh on the graph with 2^n cells on each edge
-        
+
         Args:
             n (int): number of refinements
         Returns:
             mesh (df.mesh): the global mesh
-        '''
-        
+        """
+
         # Store the coordinate dimensions
-        geom_dim = len(self.nodes[1]['pos']) 
+        geom_dim = len(self.nodes[1]["pos"])
         self.geom_dim = geom_dim
 
         self.num_edges = len(self.edges)
 
         # Make list of vertex coordinates and the cells connecting them
-        vertex_coords = np.asarray( [self.nodes[v]['pos'] for v in self.nodes()  ] )
-        cells_array = np.asarray( [ [u, v] for u,v in self.edges() ] )
-
+        vertex_coords = np.asarray([self.nodes[v]["pos"] for v in self.nodes()])
+        cells_array = np.asarray([[u, v] for u, v in self.edges()])
 
         # We first make a mesh with 1 cell per edge
         mesh = Mesh()
@@ -68,194 +66,200 @@ class FenicsGraph(nx.DiGraph):
         editor.close()
 
         # Make meshfunction containing edge ixs
-        mf = MeshFunction('size_t', mesh, 1)
-        mf.array()[:]=range(0,len(self.edges()))
-        self.mf = mf
+        mf = MeshFunction("size_t", mesh, 1)
+        mf.array()[:] = range(0, len(self.edges()))
 
-        
         # Refine global mesh until desired resolution
         for i in range(0, n):
             mesh = refine(mesh)
             mf = adapt(mf, mesh)
 
+        if not store_mesh:  # then our job is done
+            return mesh
+
         # Store refined global mesh and refined mesh function marking branches
         self.global_mesh = mesh
         self.mf = mf
 
-
         # Make and store one submesh for each edge
-        for i, (u,v) in enumerate(self.edges):
-            self.edges[u,v]['submesh'] = EmbeddedMesh(mf, i)
-            #self.edges[u,v]['submesh'] = MeshView.create(self.mf, i)
+        for i, (u, v) in enumerate(self.edges):
+            self.edges[u, v]["submesh"] = EmbeddedMesh(mf, i)
+            # self.edges[u,v]['submesh'] = MeshView.create(self.mf, i)
 
-        # Compute tangent vectors
-        self.assign_tangents()
-
-
-
-        # Give each edge a Meshfunction that marks the vertex if its a boundary node 
+        # Give each edge a Meshfunction that marks the vertex if its a boundary node
         # or a bifurcation node
         # A bifurcation node is tagged BIF_IN if the edge points into it or BIF_OUT if the edge points out of it
         # A boundary node is tagged BOUN_IN if the edge points into it or BOUN_OUT if the edge points out of it
 
         # Initialize meshfunction for each edge
         for e in self.edges():
-            msh = self.edges[e]['submesh']
-            vf = MeshFunction('size_t', msh, 0, 0)
-            self.edges[e]['vf'] = vf
+            msh = self.edges[e]["submesh"]
+            vf = MeshFunction("size_t", msh, 0, 0)
+            self.edges[e]["vf"] = vf
 
         # Make list of bifurcation nodes (connected to two or more edges)
         # and boundary nodes (connected to one edge)
         bifurcation_ixs = []
         boundary_ixs = []
         for v in self.nodes():
-            
+
             num_conn_edges = len(self.in_edges(v)) + len(self.out_edges(v))
-            
-            if num_conn_edges==1: 
-                boundary_ixs.append(v) 
-            elif num_conn_edges>1: 
+
+            if num_conn_edges == 1:
+                boundary_ixs.append(v)
+            elif num_conn_edges > 1:
                 bifurcation_ixs.append(v)
-            elif num_conn_edges==0:
-                print(f'Node {v} in G is lonely (i.e. unconnected)')
+            elif num_conn_edges == 0:
+                print(f"Node {v} in G is lonely (i.e. unconnected)")
 
         # Store these as global variables
         self.bifurcation_ixs = bifurcation_ixs
         self.num_bifurcations = len(bifurcation_ixs)
         self.boundary_ixs = boundary_ixs
-        
+
         # Loop through all bifurcation ixs and mark the edge vfs
         for b in self.bifurcation_ixs:
-            
-            for e in self.in_edges(b):
-                msh = self.edges[e]['submesh']
-                vf = self.edges[e]['vf']
 
-                bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0]
-                if len(bif_ix_in_submesh)>0:
-                    vf.array()[bif_ix_in_submesh[0]]=BIF_IN
+            for e in self.in_edges(b):
+                msh = self.edges[e]["submesh"]
+                vf = self.edges[e]["vf"]
+
+                bif_ix_in_submesh = np.where(
+                    (msh.coordinates() == self.nodes[b]["pos"]).all(axis=1)
+                )[0]
+                if len(bif_ix_in_submesh) > 0:
+                    vf.array()[bif_ix_in_submesh[0]] = BIF_IN
 
             for e in self.out_edges(b):
-                msh = self.edges[e]['submesh']
-                vf = self.edges[e]['vf']
+                msh = self.edges[e]["submesh"]
+                vf = self.edges[e]["vf"]
 
-                bif_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0]
-                if len(bif_ix_in_submesh)>0:
-                    vf.array()[bif_ix_in_submesh[0]]=BIF_OUT 
-
-        
+                bif_ix_in_submesh = np.where(
+                    (msh.coordinates() == self.nodes[b]["pos"]).all(axis=1)
+                )[0]
+                if len(bif_ix_in_submesh) > 0:
+                    vf.array()[bif_ix_in_submesh[0]] = BIF_OUT
 
         # Loop through all boundary ixs and mark the edge vfs
         inlets = []
         outlets = []
-        
+
         for b in self.boundary_ixs:
             for e in self.in_edges(b):
-                msh = self.edges[e]['submesh']
-                vf = self.edges[e]['vf']
+                msh = self.edges[e]["submesh"]
+                vf = self.edges[e]["vf"]
 
-                bound_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0]
-                if len(bound_ix_in_submesh)>0:
-                    vf.array()[bound_ix_in_submesh[0]]=BOUN_OUT 
+                bound_ix_in_submesh = np.where(
+                    (msh.coordinates() == self.nodes[b]["pos"]).all(axis=1)
+                )[0]
+                if len(bound_ix_in_submesh) > 0:
+                    vf.array()[bound_ix_in_submesh[0]] = BOUN_OUT
                     outlets.append(b)
 
             for e in self.out_edges(b):
-                msh = self.edges[e]['submesh']
-                vf = self.edges[e]['vf']
+                msh = self.edges[e]["submesh"]
+                vf = self.edges[e]["vf"]
 
-                bound_ix_in_submesh = np.where((msh.coordinates() == self.nodes[b]['pos']).all(axis=1))[0]
-                if len(bound_ix_in_submesh)>0:
-                    vf.array()[bound_ix_in_submesh[0]]=BOUN_IN
+                bound_ix_in_submesh = np.where(
+                    (msh.coordinates() == self.nodes[b]["pos"]).all(axis=1)
+                )[0]
+                if len(bound_ix_in_submesh) > 0:
+                    vf.array()[bound_ix_in_submesh[0]] = BOUN_IN
                     inlets.append(b)
-                    
+
         self.inlets = inlets
         self.outlets = outlets
 
+        # Compute tangent vectors
+        self.assign_tangents()
 
     def compute_edge_lengths(self):
-        '''
+        """
         Compute and store the length of each edge
-        '''
-        
+        """
+
         for e in self.edges():
             v1, v2 = e
-            dist = np.linalg.norm(np.asarray(self.nodes()[v2]['pos'])-np.asarray(self.nodes()[v1]['pos']))
+            dist = np.linalg.norm(
+                np.asarray(self.nodes()[v2]["pos"])
+                - np.asarray(self.nodes()[v1]["pos"])
+            )
             self.edges()[e]["length"] = dist
 
-
     def assign_tangents(self):
-        '''
+        """
         Assign a tangent vector list to each edge in the graph
-        The tangent vector lists are stored 
+        The tangent vector lists are stored
             * for each edge in G.edges[i]['tangent']
             * as a lookup dictionary in G.tangents
             * as a fenics function in self.global_tangent
-        '''
-        
-        for u,v in self.edges():
-            tangent = np.asarray(self.nodes[v]['pos'])-np.asarray(self.nodes[u]['pos'], dtype=np.float64)
+        """
+
+        for u, v in self.edges():
+            tangent = np.asarray(self.nodes[v]["pos"]) - np.asarray(
+                self.nodes[u]["pos"], dtype=np.float64
+            )
             tangent_norm = np.linalg.norm(tangent)
-            tangent_norm_inv = 1.0/tangent_norm
+            tangent_norm_inv = 1.0 / tangent_norm
             tangent *= tangent_norm_inv
-            self.edges[u,v]['tangent'] = tangent
-        self.tangents = list( nx.get_edge_attributes(self, 'tangent').items() )
+            self.edges[u, v]["tangent"] = tangent
+        self.tangents = list(nx.get_edge_attributes(self, "tangent").items())
 
         tangent = TangentFunction(self, degree=1)
-        tangent_i = interpolate(tangent, VectorFunctionSpace(self.global_mesh, 'DG', 0, self.geom_dim) )
+        tangent_i = interpolate(
+            tangent, VectorFunctionSpace(self.global_mesh, "DG", 0, self.geom_dim)
+        )
         self.global_tangent = tangent_i
-        
-    
+
     def dds(self, f):
-        '''
+        """
         function for derivative df/ds along graph
-        '''
+        """
         return dot(grad(f), self.global_tangent)
 
     def dds_i(self, f, i):
-        '''
+        """
         function for derivative df/ds along graph on branch i
-        '''
+        """
         tangent = self.tangents[i][1]
         return dot(grad(f), Constant(tangent))
-
 
     def get_num_inlets_outlets(self):
         num_inlets, num_outlets = 0, 0
 
         for e in self.edges():
-            vf_vals = self.edges[e]['vf'].array()
-            
-            num_inlets += len(list(np.where(vf_vals==BOUN_IN)[0]))
-            num_outlets += len(list(np.where(vf_vals==BOUN_OUT)[0]))
-        
+            vf_vals = self.edges[e]["vf"].array()
+
+            num_inlets += len(list(np.where(vf_vals == BOUN_IN)[0]))
+            num_outlets += len(list(np.where(vf_vals == BOUN_OUT)[0]))
+
         return num_inlets, num_outlets
 
-
     def orient_mesh(self, p_bc):
-        '''
+        """
         Orient the edges in a mesh according to flow so that it matches that
         of flow going from inlets to outlets
-        
+
         Args:
-            p_bc (df.func): pressure boundary condition that makes flow go from inlets to outlets  
-        
+            p_bc (df.func): pressure boundary condition that makes flow go from inlets to outlets
+
         After orienting the edges the mesh and tangent vectors are recomputed
         to correspond with the updated orientation
-        '''
-        
-        from flow_models import HydraulicNetwork
-        
-        model = HydraulicNetwork(self, p_bc = p_bc)
-        
+        """
+
+        from flow_models import MixedHydraulicNetwork
+
+        model = MixedHydraulicNetwork(self, p_bc=p_bc)
+
         A, b = map(ii_assemble, (model.a_form(), model.L_form()))
-        A, b = map(ii_convert, (A,b))
+        A, b = map(ii_convert, (A, b))
 
         qp = ii_Function(model.W)
-        solver = LUSolver(A, 'mumps')
+        solver = LUSolver(A, "mumps")
         solver.solve(qp.vector(), b)
-        
-        edge_signs = [func.vector().get_local()[0] for func in qp[:self.num_edges]]
-        reverse_edges = np.where( np.asarray(edge_signs) < 0)[0].tolist()
+
+        edge_signs = [func.vector().get_local()[0] for func in qp[: self.num_edges]]
+        reverse_edges = np.where(np.asarray(edge_signs) < 0)[0].tolist()
 
         edge_it = list(self.edges())
 
@@ -265,95 +269,96 @@ class FenicsGraph(nx.DiGraph):
                 self.add_edge(edge[1], edge[0])
 
         return qp
-        
+
 
 class GlobalFlux(UserExpression):
-    '''
+    """
     Evaluates P2 flux on each edge
-    '''
+    """
+
     def __init__(self, G, qs, **kwargs):
-        '''
+        """
         Args:
             G (nx.graph): Network graph
             qs (list): list of fluxes on each edge in the branch
-        '''
-        
-        self.G=G
+        """
+
+        self.G = G
         self.qs = qs
         super().__init__(**kwargs)
 
     def eval_cell(self, values, x, cell):
         edge = self.G.mf[cell.index]
         tangent = self.G.tangents[edge][1]
-        values[0] = self.qs[edge](x)*tangent[0]
-        values[1] = self.qs[edge](x)*tangent[1]
-        if self.G.geom_dim == 3: 
-            values[2] = self.qs[edge](x)*tangent[2]
+        values[0] = self.qs[edge](x) * tangent[0]
+        values[1] = self.qs[edge](x) * tangent[1]
+        if self.G.geom_dim == 3:
+            values[2] = self.qs[edge](x) * tangent[2]
 
     def value_shape(self):
         return (self.G.geom_dim,)
 
 
-class GlobalPressure(UserExpression):
-    '''
-    Evaluates P1 pressure on each edge
-    '''
-    def __init__(self, G, ps, **kwargs):
-        '''
+class GlobalCrossectionFlux(UserExpression):
+    """
+    Evaluates P2 flux on each edge
+    """
+
+    def __init__(self, G, qs, **kwargs):
+        """
         Args:
             G (nx.graph): Network graph
             qs (list): list of fluxes on each edge in the branch
-        '''
-        
-        self.G=G
-        self.ps = ps
+        """
+
+        self.G = G
+        self.qs = qs
         super().__init__(**kwargs)
 
     def eval_cell(self, values, x, cell):
         edge = self.G.mf[cell.index]
-        values[0] = self.ps[edge](x)
-
+        values[0] = self.qs[edge](x)
 
 
 class TangentFunction(UserExpression):
-    '''
-    Tangent expression for graph G, which is 
+    """
+    Tangent expression for graph G, which is
     constructed from G.tangents
-    '''
+    """
+
     def __init__(self, G, degree, **kwargs):
-        '''
+        """
         Args:
             G (nx.graph): Network graph
             degree (int): degree of resulting expression
-        '''
-        self.G=G
-        self.degree=degree
+        """
+        self.G = G
+        self.degree = degree
         super().__init__(**kwargs)
 
     def eval_cell(self, values, x, cell):
         edge = self.G.mf[cell.index]
         values[0] = self.G.tangents[edge][1][0]
         values[1] = self.G.tangents[edge][1][1]
-        if self.G.geom_dim==3: values[2] = self.G.tangents[edge][1][2]
+        if self.G.geom_dim == 3:
+            values[2] = self.G.tangents[edge][1][2]
+
     def value_shape(self):
         return (self.G.geom_dim,)
 
 
-
 def copy_from_nx_graph(G_nx):
-    '''
+    """
     Return deep copy of nx.Graph as FenicsGraph
     Args:
         G_nx (nx.Graph): graph to be coped
     Returns:
         G (FenicsGraph): fenics type graph with nodes and egdes from G_nx
-    '''
-    
+    """
+
     G = FenicsGraph()
     G.graph.update(G_nx.graph)
     G.add_nodes_from((n, d.copy()) for n, d in G_nx._node.items())
-    for u,v in G_nx.edges():
-        G.add_edge(u,v)
+    for u, v in G_nx.edges():
+        G.add_edge(u, v)
     return G
-
-    

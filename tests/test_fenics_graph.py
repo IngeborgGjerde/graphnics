@@ -22,7 +22,7 @@ def test_fenics_graph():
         vertex_ix = np.where((mesh_c == vertex_c).all(axis=1))[0]
         assert len(vertex_ix)==1, 'vertex coordinate is not a mesh coordinate'
         
-        
+
 
 if __name__ == '__main__':
     test_fenics_graph()

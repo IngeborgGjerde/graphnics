@@ -24,7 +24,7 @@ def test_mass_conservation():
         nx.set_edge_attributes(G, prop_dict)
 
 
-        model = HydraulicNetwork(G, p_bc=Expression('x[0]', degree=2))
+        model = MixedHydraulicNetwork(G, p_bc=Expression('x[0]', degree=2))
         
         W = model.W
         a = model.a_form()

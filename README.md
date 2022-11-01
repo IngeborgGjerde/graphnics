@@ -34,4 +34,8 @@ and enter the html-links it provides in your browser.
 
 ## Paper 
 
-This code is currently being prepared for submission to JOSS. The paper draft can be found [here.](https://github.com/IngeborgGjerde/graphnics/blob/main/paper/joss.md)
+This code is currently being prepared for submission to JOSS, titled:
+
+*Graphnics: Combining networkx and FEniCS to solve network models* by Ingeborg Gjerde
+
+The paper draft can be found [here.](https://github.com/IngeborgGjerde/graphnics/blob/main/paper/joss.md)

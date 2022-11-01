@@ -10,7 +10,7 @@ authors:
     equal-contrib: true
     affiliation: "1" # (Multiple affiliations must be quoted)
 affiliations:
- - name: Ingeborg Gjerde, Simula Research Laboratory
+ - name: Simula Research Laboratory
    index: 1
 date: December 2022
 bibliography: paper.bib

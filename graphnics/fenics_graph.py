@@ -358,7 +358,23 @@ def copy_from_nx_graph(G_nx):
 
     G = FenicsGraph()
     G.graph.update(G_nx.graph)
+    
+    # copy nodes and edges
     G.add_nodes_from((n, d.copy()) for n, d in G_nx._node.items())
     for u, v in G_nx.edges():
         G.add_edge(u, v)
+    
+    # copy node attributes
+    for n in G.nodes():
+        node_dict = G_nx.nodes()[n]
+        for key in node_dict:
+            G.nodes()[n][key] = G_nx.nodes()[n][key]
+            
+    # copy edge attributes
+    for e in G.edges():
+        edge_dict = G_nx.edges()[e]
+        for key in edge_dict:
+            G.edges()[e][key] = G_nx.edges()[e][key]
+        
+
     return G

@@ -269,7 +269,8 @@ class MixedHydraulicNetwork:
 
         submeshes = list(nx.get_edge_attributes(self.G, "submesh").values())
         phis = [Restriction(phi, msh) for msh in submeshes]
-
+        fs = [project(self.f, FunctionSpace(msh, 'CG', 1)) for msh in submeshes]
+        
         # Assemble edge contributions to a and L
         for i, e in enumerate(self.G.edges):
             ds_edge = Measure(
@@ -279,11 +280,8 @@ class MixedHydraulicNetwork:
             )
             dx_edge = Measure("dx", domain=self.G.edges[e]["submesh"])
 
-            L[i] += self.p_bc * vs[i] * ds_edge(BOUN_OUT) - self.p_bc * vs[i] * ds_edge(
-                BOUN_IN
-            )
-
-            L[n_edges] += self.f * phis[i] * dx_edge
+            L[i] += self.p_bc * vs[i] * ds_edge(BOUN_OUT) - self.p_bc * vs[i] * ds_edge(BOUN_IN)
+            L[n_edges] += fs[i] * phis[i] * dx_edge
 
         for i in range(0, len(self.G.bifurcation_ixs)):
             L[n_edges + 1 + i] += Constant(0) * xis[i] * dx

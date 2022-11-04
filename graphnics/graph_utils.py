@@ -244,8 +244,9 @@ class DistFromSource(UserExpression):
             dist_func.vector()[dof_ix] = dist[n]
 
         # Assign dist_func as a class variable and query it in eval
-        # dist_func.set_allow_extrapolation(True)
+        dist_func.set_allow_extrapolation(True)
         self.dist_func = dist_func
+        
 
     def eval(self, values, x):
         # Query the CG-1 dist_func

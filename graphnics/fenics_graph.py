@@ -77,6 +77,7 @@ class FenicsGraph(nx.DiGraph):
         if not store_mesh:  # then our job is done
             return mesh
 
+
         # Store refined global mesh and refined mesh function marking branches
         self.global_mesh = mesh
         self.mf = mf
@@ -84,8 +85,8 @@ class FenicsGraph(nx.DiGraph):
         # Make and store one submesh for each edge
         for i, (u, v) in enumerate(self.edges):
             self.edges[u, v]["submesh"] = EmbeddedMesh(mf, i)
-            # self.edges[u,v]['submesh'] = MeshView.create(self.mf, i)
-
+            
+        
         # Give each edge a Meshfunction that marks the vertex if its a boundary node
         # or a bifurcation node
         # A bifurcation node is tagged BIF_IN if the edge points into it or BIF_OUT if the edge points out of it
@@ -117,61 +118,17 @@ class FenicsGraph(nx.DiGraph):
         self.num_bifurcations = len(bifurcation_ixs)
         self.boundary_ixs = boundary_ixs
 
-        # Loop through all bifurcation ixs and mark the edge vfs
-        for b in self.bifurcation_ixs:
-
-            for e in self.in_edges(b):
-                msh = self.edges[e]["submesh"]
-                vf = self.edges[e]["vf"]
-
-                bif_ix_in_submesh = np.where(
-                    (msh.coordinates() == self.nodes[b]["pos"]).all(axis=1)
-                )[0]
-                if len(bif_ix_in_submesh) > 0:
-                    vf.array()[bif_ix_in_submesh[0]] = BIF_IN
-
-            for e in self.out_edges(b):
-                msh = self.edges[e]["submesh"]
-                vf = self.edges[e]["vf"]
-
-                bif_ix_in_submesh = np.where(
-                    (msh.coordinates() == self.nodes[b]["pos"]).all(axis=1)
-                )[0]
-                if len(bif_ix_in_submesh) > 0:
-                    vf.array()[bif_ix_in_submesh[0]] = BIF_OUT
-
-        # Loop through all boundary ixs and mark the edge vfs
-        inlets = []
-        outlets = []
-
-        for b in self.boundary_ixs:
-            for e in self.in_edges(b):
-                msh = self.edges[e]["submesh"]
-                vf = self.edges[e]["vf"]
-
-                bound_ix_in_submesh = np.where(
-                    (msh.coordinates() == self.nodes[b]["pos"]).all(axis=1)
-                )[0]
-                if len(bound_ix_in_submesh) > 0:
-                    vf.array()[bound_ix_in_submesh[0]] = BOUN_OUT
-                    outlets.append(b)
-
-            for e in self.out_edges(b):
-                msh = self.edges[e]["submesh"]
-                vf = self.edges[e]["vf"]
-
-                bound_ix_in_submesh = np.where(
-                    (msh.coordinates() == self.nodes[b]["pos"]).all(axis=1)
-                )[0]
-                if len(bound_ix_in_submesh) > 0:
-                    vf.array()[bound_ix_in_submesh[0]] = BOUN_IN
-                    inlets.append(b)
-
-        self.inlets = inlets
-        self.outlets = outlets
+        # Mark the meshfunction belonging to each edge with
+        # - BIF_IN/BIF_OUT if the vertex belongs to an edge that goes in/out of the bif node
+        self.mark_edge_vfs(self.bifurcation_ixs, BIF_IN, BIF_OUT)
+        # - BOUN_OUT/BOUN_IN if the vertex is an inlet or outlet point
+        self.mark_edge_vfs(self.boundary_ixs, BOUN_OUT, BOUN_IN)
+        # Note: We need to reverse our notation here so that BOUN_OUT is applied to
+        # edges going into a boundary node (which is actually an outlet)
 
         # Compute tangent vectors
         self.assign_tangents()
+
 
     def compute_edge_lengths(self):
         """
@@ -235,40 +192,39 @@ class FenicsGraph(nx.DiGraph):
 
         return num_inlets, num_outlets
 
-    def orient_mesh(self, p_bc):
-        """
-        Orient the edges in a mesh according to flow so that it matches that
-        of flow going from inlets to outlets
+
+    def mark_edge_vfs(self, node_ixs, tag_in, tag_out):
+        """ Mark the meshfunction belonging to the edges submesh 
+        with tag_in if the edge goes into a node in node_ixs
+        and tag_out if the edge goes out of a node in node_ixs
 
         Args:
-            p_bc (df.func): pressure boundary condition that makes flow go from inlets to outlets
-
-        After orienting the edges the mesh and tangent vectors are recomputed
-        to correspond with the updated orientation
+            node_ixs (list): _description_
+            edges (func): _description_
+            tag (int): corresponding tag 
         """
+        for n in node_ixs:
 
-        from flow_models import MixedHydraulicNetwork
+            for e in self.in_edges(n):
+                msh = self.edges[e]["submesh"]
+                vf = self.edges[e]["vf"]
 
-        model = MixedHydraulicNetwork(self, p_bc=p_bc)
+                node_ix_in_submesh = np.where(
+                    (msh.coordinates() == self.nodes[n]["pos"]).all(axis=1)
+                )[0]
+                if len(node_ix_in_submesh) > 0:
+                    vf.array()[node_ix_in_submesh[0]] = tag_in
 
-        A, b = map(ii_assemble, (model.a_form(), model.L_form()))
-        A, b = map(ii_convert, (A, b))
 
-        qp = ii_Function(model.W)
-        solver = LUSolver(A, "mumps")
-        solver.solve(qp.vector(), b)
+            for e in self.out_edges(n):
+                msh = self.edges[e]["submesh"]
+                vf = self.edges[e]["vf"]
 
-        edge_signs = [func.vector().get_local()[0] for func in qp[: self.num_edges]]
-        reverse_edges = np.where(np.asarray(edge_signs) < 0)[0].tolist()
-
-        edge_it = list(self.edges())
-
-        for edge_ix, edge in enumerate(edge_it):
-            if edge_ix in reverse_edges:
-                self.remove_edge(edge[0], edge[1])
-                self.add_edge(edge[1], edge[0])
-
-        return qp
+                node_ix_in_submesh = np.where(
+                    (msh.coordinates() == self.nodes[n]["pos"]).all(axis=1)
+                )[0]
+                if len(node_ix_in_submesh) > 0:
+                    vf.array()[node_ix_in_submesh[0]] = tag_out
 
 
 class GlobalFlux(UserExpression):

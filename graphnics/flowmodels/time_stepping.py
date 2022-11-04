@@ -9,7 +9,7 @@ time_stepping_schemes = {"IE": {"b1": 0, "b2": 1}, "CN": {"b1": 0.5, "b2": 0.5}}
 
 
 def time_stepping_stokes(
-    model, rho=Constant(1), t_steps=10, T=1, qp_n=None, t_step_scheme="IE"
+    model, rho=Constant(1), t=Constant(0), t_steps=10, T=1, qp_n=None, t_step_scheme="IE"
 ):
     """
     Do time stepping for models of the type
@@ -65,18 +65,14 @@ def time_stepping_stokes(
     C = ii_convert(ii_assemble(a_bif))  # not time dependent
 
     # Update f and n to next time step
-    model.f.t, model.p_bc.t = 0, 0
+    t.assign(0)
+    
     An, Ln, DDn = [ii_convert(ii_assemble(term)) for term in [a_diag, L, Dn]]
-
-    model.f.t, model.p_bc.t = dt, dt
-    for e in model.G.edges():
-        model.G.edges()[e]["Res"].t = dt
-        model.G.edges()[e]["Ainv"].t = dt
 
     An1, Ln1, DDn1 = [ii_convert(ii_assemble(term)) for term in [a_diag, L, Dn1]]
 
-    for t in np.linspace(dt, T, t_steps - 1):
-
+    for t_val in np.linspace(dt, T, t_steps - 1):
+        print(f'{t_val:1.4f}')
         A = ii_convert(DDn1 + cn1 * dt * An1 + cn1 * dt * B + cn1 * dt * C)
         b = ii_convert(
             DDn + cn1 * dt * Ln1
@@ -97,13 +93,17 @@ def time_stepping_stokes(
         Ln = Ln1.copy()
         DDn = ii_convert(DDn1 * qp_n.vector())
 
-        model.f.t, model.p_bc.t = t + dt, t + dt
-        for e in model.G.edges():
-            model.G.edges()[e]["Res"].t = t + dt
-            model.G.edges()[e]["Ainv"].t = t + dt
-
-        An1, Ln1, DDn1 = [ii_assemble(term) for term in [a_diag, L, Dn1]]
-
+        t.assign(t_val)
+        
+        a_diag = model.diag_a_form_on_edges()
+        a_offdiag = model.offdiag_a_form_on_edges()
+        a_bif = model.a_form_on_bifs()
+        L = model.L_form()
+        
+        An1 = ii_assemble(a_diag)
+        Ln1 = ii_assemble(L)
+        DDn1 = ii_assemble(Dn1)
+        
         An1, Ln1, DDn1 = [ii_convert(term) for term in [An1, Ln1, DDn1]]
 
     return qps

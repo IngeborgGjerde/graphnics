@@ -17,9 +17,8 @@ def make_line_graph(n, dim=2):
     dx = 1
     G.add_nodes_from(range(0, n))
     for i in range(0, n):
-        G.nodes[i]["pos"] = [i * dx] + [0] * (
-            dim - 1
-        )  # coords is (dx, 0) in 2D and (dx, 0, 0) in 3D
+        G.nodes[i]["pos"] = [i * dx] + [0] * (dim - 1)  
+        # coords is (dx, 0) in 2D and (dx, 0, 0) in 3D
 
     for i in range(0, n - 1):
         G.add_edge(i, i + 1)
@@ -71,15 +70,21 @@ def honeycomb(n, m):
     return G
 
 
-def make_Y_bifurcation():
+def make_Y_bifurcation(dim=2):
+    """
+    Args:
+        dim (int, optional): spatial dimension of node coords. Defaults to 2.
 
+    Returns:
+        FenicsGraph: network tree with one generation
+    """
     G = FenicsGraph()
 
     G.add_nodes_from([0, 1, 2, 3])
-    G.nodes[0]["pos"] = [0, 0]
-    G.nodes[1]["pos"] = [0, 0.5]
-    G.nodes[2]["pos"] = [-0.5, 1]
-    G.nodes[3]["pos"] = [0.5, 1]
+    G.nodes[0]["pos"] = [0, 0] + [0]* (dim - 2)
+    G.nodes[1]["pos"] = [0, 0.5]  + [0]* (dim - 2)
+    G.nodes[2]["pos"] = [-0.5, 1]  + [0]* (dim - 2)
+    G.nodes[3]["pos"] = [0.5, 1]  + [0]* (dim - 2)
 
     G.add_edge(0, 1)
     G.add_edge(1, 2)
@@ -89,15 +94,22 @@ def make_Y_bifurcation():
     return G
 
 
-def make_double_Y_bifurcation():
+def make_double_Y_bifurcation(dim=2):
+    """
+    Args:
+        dim (int, optional): spatial dimension of node coords. Defaults to 2.
 
+    Returns:
+        FenicsGraph: network tree with two generations
+    """
+    
     G = FenicsGraph()
 
     G.add_nodes_from([0, 1, 2, 3, 4, 5, 6, 7])
-    G.nodes[0]["pos"] = [0, 0]
-    G.nodes[1]["pos"] = [0, 0.5]
-    G.nodes[2]["pos"] = [-0.5, 1]
-    G.nodes[3]["pos"] = [0.5, 1]
+    G.nodes[0]["pos"] = [0, 0] + [0]* (dim - 2)
+    G.nodes[1]["pos"] = [0, 0.5] + [0]* (dim - 2)
+    G.nodes[2]["pos"] = [-0.5, 1] + [0]* (dim - 2)
+    G.nodes[3]["pos"] = [0.5, 1] + [0]* (dim - 2)
 
     G.add_edge(0, 1)
     G.add_edge(1, 2)

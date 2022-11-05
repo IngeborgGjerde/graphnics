@@ -14,29 +14,30 @@ RUN apt-get -qq update && \
     pip install networkx && \
     pip install pandas && \
     pip install tqdm && \
+    pip install jupyter && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*- && \
     pip install -U setuptools
     
 # Get fenics_ii
 RUN git clone https://github.com/MiroK/fenics_ii.git && \
     cd fenics_ii && \
-    python3 setup.py install --user && \
+    python3 setup.py install && \
     cd ..
+
 
 # cbc.block
 RUN git clone https://bitbucket.org/fenics-apps/cbc.block && \
     cd cbc.block && \
-    python3 setup.py install --user && \
+    python3 setup.py install && \
+    cd ..
+
+# Get graphnics
+RUN git clone https://github.com/IngeborgGjerde/graphnics.git && \
+    cd graphnics && \
+    python3 setup.py install && \
     cd ..
 
 # fix decorator error by reinstalling scipy
 RUN pip uninstall -y scipy && pip install scipy
 
-#  networkgen for creating arterial trees
-RUN git clone https://gitlab.com/ValletAlexandra/NetworkGen
-    #cd NetworkGen  && \
-    ##source setup.rc  && \
-    #cd ..
-# the source.setup.rc fails in docker build so we do it manually later
 
-RUN python3 -m pip install jupyter

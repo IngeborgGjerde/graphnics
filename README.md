@@ -1,3 +1,6 @@
+[![Pytest](https://github.com/IngeborgGjerde/graphnics/actions/workflows/main.yml/badge.svg)](https://github.com/IngeborgGjerde/graphnics/actions/workflows/main.yml)
+[![Docker image](https://github.com/IngeborgGjerde/graphnics/actions/workflows/docker-image.yml/badge.svg)](https://github.com/IngeborgGjerde/graphnics/actions/workflows/docker-image.yml)
+
 # Implementing network models in FEniCS
 
 The `graphnics` library solves network models using the finite element method. This is facilitated via the `FenicsGraph` class which is an extension of the `DiGraph` class in `networkx`. 

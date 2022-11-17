@@ -29,25 +29,10 @@ RUN git clone https://bitbucket.org/fenics-apps/cbc.block && \
     python3 -m pip install . && \
     cd ..
     
+
     
 # fix decorator error by reinstalling scipy
 RUN pip uninstall -y scipy && pip install scipy
 
 
-# Create user with a home directory
-ARG NB_USER
-ARG NB_UID=1000
-ENV USER ${NB_USER}
-ENV HOME /home/${NB_USER}
-
-RUN echo $NB_USER
-   
-# Copy home directory for usage with Binder
-WORKDIR ${HOME}
-COPY . ${HOME}
-USER root
-RUN chown -R ${NB_UID} ${HOME}
-
-USER ${NB_USER}
-#ENTRYPOINT []
-
+RUN python3 -m pip install git+https://github.com/IngeborgGjerde/graphnics

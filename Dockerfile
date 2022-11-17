@@ -1,5 +1,5 @@
 # Use github pages for docker image
-FROM ghcr.io/ingeborggjerde/graphnics:v0.1.0
+FROM ghcr.io/ingeborggjerde/graphnics:v0.2.0
 
 # Create user with a home directory
 ARG NB_USER
@@ -10,6 +10,8 @@ ENV HOME /home/${NB_USER}
 # Copy current directory
 WORKDIR ${HOME}
 COPY . ${HOME}
+
+
 
 # Change ownership of home directory
 USER root

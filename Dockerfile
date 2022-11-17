@@ -1,43 +1,19 @@
-# Builds a Docker image containing the mixed-dimensional features of FEniCS
-# found in
-#   - fenics_mixed_dimensional 
-#   - fenics_ii 
+# Use github pages for docker image
+FROM ghcr.io/ingeborggjerde/graphnics:v0.1.0
 
-FROM ceciledc/fenics_mixed_dimensional:21-06-22
+# Create user with a home directory
+ARG NB_USER
+ARG NB_UID=1000
+ENV USER ${NB_USER}
+ENV HOME /home/${NB_USER}
 
+# Copy current directory
+WORKDIR ${HOME}
+COPY . ${HOME}
+
+# Change ownership of home directory
 USER root
+RUN chown -R ${NB_UID} ${HOME}
 
-RUN apt-get -qq update && \
-    apt-get clean && \
-    apt-get -y install python3-h5py && \
-    pip install --upgrade pip && \
-    pip install networkx && \
-    pip install pandas && \
-    pip install tqdm && \
-    pip install jupyter && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*- && \
-    pip install -U setuptools
-    
-# Get fenics_ii
-RUN git clone https://github.com/MiroK/fenics_ii.git && \
-    cd fenics_ii && \
-    python3 setup.py install && \
-    cd ..
-
-
-# cbc.block
-RUN git clone https://bitbucket.org/fenics-apps/cbc.block && \
-    cd cbc.block && \
-    python3 setup.py install && \
-    cd ..
-
-# Get graphnics
-RUN git clone https://github.com/IngeborgGjerde/graphnics.git && \
-    cd graphnics && \
-    python3 setup.py install && \
-    cd ..
-
-# fix decorator error by reinstalling scipy
-RUN pip uninstall -y scipy && pip install scipy
-
-
+USER ${NB_USER}
+ENTRYPOINT []

@@ -1,5 +1,6 @@
 [![Pytest](https://github.com/IngeborgGjerde/graphnics/actions/workflows/main.yml/badge.svg)](https://github.com/IngeborgGjerde/graphnics/actions/workflows/main.yml)
 [![Docker image](https://github.com/IngeborgGjerde/graphnics/actions/workflows/docker-image.yml/badge.svg)](https://github.com/IngeborgGjerde/graphnics/actions/workflows/docker-image.yml)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/IngeborgGjerde/graphnics/HEAD?labpath=https%3A%2F%2Fgithub.com%2FIngeborgGjerde%2Fgraphnics%2Ftree%2Fmain%2Fdemo)
 
 # Implementing network models in FEniCS
 
@@ -21,17 +22,17 @@ The environment is provided as a docker container. The container can be built an
 ```shell
 git clone https://github.com/IngeborgGjerde/fenics-networks/
 cd fenics-networks
-docker build --no-cache -t fenics-networks .
-docker run --name networkfenics -v "$(pwd):/home/fenics/shared" -d -p 127.0.0.1:8888:8888 fenics-networks 'jupyter-notebook --ip=0.0.0.0'
+docker build --no-cache -t graphnics .
+docker run --name graphnics-container -v "$(pwd):/home/fenics/shared" -d -p 127.0.0.1:8888:8888 fenics-networks 'jupyter-notebook --ip=0.0.0.0'
 ```
 
 You can then enter the container by running 
 ```shell
-docker exec -it networkfenics /bin/bash
+docker exec -it graphncis-container /bin/bash
 ```
 To connect it to a jupyter notebook, run
 ```shell
-docker logs networkfenics
+docker logs graphnics-container
 ```
 and enter the html-links it provides in your browser.
 

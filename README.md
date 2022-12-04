@@ -1,6 +1,6 @@
 [![Pytest](https://github.com/IngeborgGjerde/graphnics/actions/workflows/main.yml/badge.svg)](https://github.com/IngeborgGjerde/graphnics/actions/workflows/main.yml)
 [![Docker image](https://github.com/IngeborgGjerde/graphnics/actions/workflows/docker-image.yml/badge.svg)](https://github.com/IngeborgGjerde/graphnics/actions/workflows/docker-image.yml)
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/IngeborgGjerde/graphnics/HEAD?labpath=https%3A%2F%2Fgithub.com%2FIngeborgGjerde%2Fgraphnics%2Ftree%2Fmain%2Fdemo)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/IngeborgGjerde/graphnics/HEAD)
 
 # Implementing network models in FEniCS
 

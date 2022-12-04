@@ -11,7 +11,7 @@ please see https://physiology.arizona.edu/people/secomb/network for information 
 their dataset
 '''
 
-def read_network(url):
+def get_graph(url):
     '''
     Parse the dataset given at url
     
@@ -37,13 +37,13 @@ def read_network(url):
         row =  ' ' + row # make sure all rows are zero padded
         vals = re.split(r'\s{1,}', row) # split with variable amount of white space
         
-        v1 = int(vals[3]) # vertex 1
-        v2 = int(vals[4]) # vertex 2
-        diam = float(vals[5]) # diameter
+        v1 = int(vals[-10]) # vertex 1
+        v2 = int(vals[-9]) # vertex 2
+        diam = float(vals[-8]) # diameter
         
         # coordinates of vertices
-        pos_v1 = [float(c) for c in vals[7:10]]
-        pos_v2 = [float(c) for c in vals[10:13]]
+        pos_v1 = [float(c) for c in vals[-6:-3]]
+        pos_v2 = [float(c) for c in vals[-3:]]
         
         # Add to networkx graph
         G.add_edge(v1, v2)
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     url = 'https://physiology.arizona.edu/sites/default/files/rattum98_0.txt'
 
     # Read and plot network
-    G = read_network(url)
+    G = get_graph(url)
     G.make_mesh(3)
     File("network.pvd") << Function(FunctionSpace(G.global_mesh, "CG", 1))
 
@@ -76,6 +76,9 @@ if __name__ == "__main__":
 
     xmin, ymin, zmin = np.min(node_coords, axis=0)
     xmax, ymax, zmax = np.max(node_coords, axis=0)
+    print(xmin, ymin, zmin)
+    print(xmax, ymax, zmax)
+
 
     c[:, 0] *= (xmax - xmin) * 1.1
     c[:, 1] *= (ymax - ymin) * 1.1

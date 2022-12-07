@@ -41,7 +41,8 @@ def time_stepping_stokes(
 
     # We discretize the time derivative term as rho/A d/dt q = rho/A (qn1 - qn)/Delta t
     cn, cn1 = time_stepping_schemes[t_step_scheme].values()
-
+    
+    print('Setting up problem...')
     Dn1 = model.init_a_form()
     Dn = model.init_L_form()
 
@@ -77,6 +78,7 @@ def time_stepping_stokes(
 
     An1, Ln1, DDn1 = [ii_convert(ii_assemble(term)) for term in [a_diag, L, Dn1]]
 
+    print('Time stepping')
     for t_val in tqdm(np.linspace(dt, T, t_steps - 1)):
         
         A = ii_convert(DDn1 + cn1 * dt * An1 + cn1 * dt * B + cn1 * dt * C)
@@ -151,6 +153,8 @@ def time_stepping_stokes_IE_simplified(
 
     # We discretize the time derivative term as rho/A d/dt q = rho/A (qn1 - qn)/Delta t
     cn, cn1 = time_stepping_schemes[t_step_scheme].values()
+    
+    print('Setting up problem...')
 
     Dn1 = model.init_a_form()
     Dn = model.init_L_form()
@@ -191,7 +195,7 @@ def time_stepping_stokes_IE_simplified(
 
     A = ii_convert(DDn1 + dt * An + dt * B + dt * C)
         
-
+    print('Time stepping')
     for t in tqdm(np.linspace(dt, T, t_steps - 1)):
         
         b = ii_convert( DDn + dt * Ln1)

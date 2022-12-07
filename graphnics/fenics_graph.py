@@ -274,6 +274,9 @@ class GlobalCrossectionFlux(UserExpression):
     def eval_cell(self, values, x, cell):
         edge = self.G.mf[cell.index]
         values[0] = self.qs[edge](x)
+    
+    def value_shape(self):
+        return ()
 
 
 class TangentFunction(UserExpression):

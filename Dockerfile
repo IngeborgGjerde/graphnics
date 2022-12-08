@@ -1,5 +1,5 @@
 # Use github pages for docker image
-FROM ghcr.io/ingeborggjerde/graphnics:v0.2.0
+FROM ghcr.io/ingeborggjerde/graphnics:v0.3.0
 
 # Create user with a home directory
 ARG NB_USER

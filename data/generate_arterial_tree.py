@@ -3,12 +3,13 @@ import numpy as np
 import random
 import copy
 
-### Creation of a tree-like network ###
-# This is an adaption of code created by Alexandra Vallet (University of Oslo)
-# See https://gitlab.com/ValletAlexandra/NetworkGen for the original
-
 """
-Murray's law 
+Creation of a tree-like network
+This is an adaption of code created by Alexandra Vallet (University of Oslo)
+See https://gitlab.com/ValletAlexandra/NetworkGen for the original
+
+
+Background: Murray's law 
 We consider that the sum of power 3 of daughter vessels radii equal to the power three of the parent vessel radius
 D0^3=D1^3 + D2^3
 We consider that the ratio between two daughter vessels radii is gam
@@ -30,17 +31,17 @@ Then it depends on the diameters
 
 
 def make_arterial_tree(
-    N, radius0=1, gam=0.8, lmbda=8, signs=False, uniform_lengths=False
+    N, radius0=1, gam=0.8, lmbda=8, directions=False, uniform_lengths=False
 ):
     """
     N (int): number of levels in the arterial tree
     radius0 (float): radius of first vessel
     gam (float): ratio between daughter vessel radii
-    signs (list): vector of choices (+-1) of vessel direction. If no vector is given this is assigned randomly.
+    directions (list): vector of choices (+-1) of vessel direction. If no vector is given this is assigned randomly.
     uniform_lengths (bool): uniform branch length
     
     Uniform lengths is typically only of interest in numerical tests
-    Assigning signs is useful for reproducability of results.
+    Assigning directions is useful for reproducability of results.
     """
 
     # Parameters
@@ -113,8 +114,9 @@ def make_arterial_tree(
             )
             angle2 = np.degrees(np.arccos(cos2))
 
-            # randomly chopse which vessel go to the right/left
-            if not signs:
+            # direction-vector choose which vessel go to the right/left
+            
+            if not direction:
                 sign1 = random.choice((-1, 1))
             else:
                 sign1 = signs[0]
@@ -171,38 +173,30 @@ def make_arterial_tree(
                     current_edges.append(new_edge)
 
         previous_edges = current_edges
+        
+    
+    # Convert to FenicsGraph
+    G_ = nx.convert_node_labels_to_integers(G)
+
+    G = copy_from_nx_graph(G_)
+    G.make_mesh(3)
 
     return G
 
 
-class Point:
-    def __init__(self, xx):
-        self.x = xx[0]
-        self.y = xx[1]
-
-# Shamelessly copied from stackoverflow :-)
-# Given three collinear points p, q, r, the function checks if
-# point q lies on line segment 'pr'
-def onSegment(p, q, r):
-    if (
-        (q.x <= max(p.x, r.x))
-        and (q.x >= min(p.x, r.x))
-        and (q.y <= max(p.y, r.y))
-        and (q.y >= min(p.y, r.y))
-    ):
-        return True
-    return False
-
+## Helper functions from NetworkGen
 
 def orientation(p, q, r):
-    # to find the orientation of an ordered triplet (p,q,r)
-    # function returns the following values:
-    # 0 : Collinear points
-    # 1 : Clockwise points
-    # 2 : Counterclockwise
+    '''
+    to find the orientation of an ordered triplet (p,q,r)
+    function returns the following values:
+    0 : Collinear points
+    1 : Clockwise points
+    2 : Counterclockwise
 
-    # See https://www.geeksforgeeks.org/orientation-3-ordered-points/amp/
-    # for details of below formula.
+    See https://www.geeksforgeeks.org/orientation-3-ordered-points/amp/
+    for details of below formula.
+    '''
 
     val = (float(q.y - p.y) * (r.x - q.x)) - (float(q.x - p.x) * (r.y - q.y))
     if val > 0:
@@ -312,3 +306,26 @@ def compute_vessel_endpoint (previousvessel, surfacenormal,angle,length) :
 
 
     return pnew
+
+
+
+
+## Functions for checking if lines intersect
+# Shamelessly copied from stackoverflow
+
+class Point:
+    def __init__(self, xx):
+        self.x = xx[0]
+        self.y = xx[1]
+# Given three collinear points p, q, r, the function checks if
+# point q lies on line segment 'pr'
+def onSegment(p, q, r):
+    if (
+        (q.x <= max(p.x, r.x))
+        and (q.x >= min(p.x, r.x))
+        and (q.y <= max(p.y, r.y))
+        and (q.y >= min(p.y, r.y))
+    ):
+        return True
+    return False
+

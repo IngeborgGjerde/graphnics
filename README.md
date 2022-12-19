@@ -28,7 +28,7 @@ docker build --no-cache -t graphnics . # build docker image
 cd ..
 
 # make container
-docker run --name graphnics-container -v "$(pwd):/home/fenics/shared" -d -p 127.0.0.1:8888:8888 fenics-networks 'jupyter-notebook --ip=0.0.0.0'
+docker run --name graphnics-container -v "$(pwd):/home/fenics/shared" -d -p 127.0.0.1:8888:8888 graphnics 'jupyter-notebook --ip=0.0.0.0'
 ```
 
 You can then enter the container by running 

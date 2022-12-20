@@ -45,6 +45,81 @@ class NetworkPoisson:
         return bc
 
 
+
+class HydraulicNetwork:
+    """
+    Bilinear forms a and L for the hydraulic equations
+            Res*q + d/ds p = g
+            d/ds q = f
+    on graph G, with bifurcation conditions q_in = q_out and continuous pressure
+    """
+
+    def __init__(self, G, f=Constant(0), p_bc=Constant(0), Res=Constant(1), degree=1):
+
+        # Graph on which the model lives
+        self.G = G
+
+        # Model parameters
+        self.f = f
+        self.p_bc = p_bc
+        self.Res = Res
+
+        self.W = [FunctionSpace(G.global_mesh, "DG", degree-1),
+                  FunctionSpace(G.global_mesh, "CG", degree)]
+
+
+        self.qp = list(map(TrialFunction, self.W))
+        self.vphi = list(map(TestFunction, self.W))
+
+    def a_form(self):
+        
+        G = self.G
+        q, p = self.qp
+        v, phi = self.vphi
+
+        a = [[0 for i in range(0, len(self.qp))] for j in range(0, len(self.qp))]
+        
+        a[0][0] = self.Res * inner(q, v) * dx
+        a[0][1] = inner(G.dds(p), v) * dx
+        a[1][0] = inner(G.dds(phi), q) * dx
+
+        return a
+
+    def L_form(self):
+        v, phi = self.vphi
+        L = [0, 0]
+        L[0] = Constant(0)*v*dx
+        L[1] = self.f*phi*dx 
+        return L
+    
+    def get_bc(self):
+        bcs = [[], [DirichletBC(self.W[1], self.p_bc, "on_boundary")]]
+        return bcs
+    
+    
+    def solve(self):
+        
+        W = self.W
+        a = self.a_form()
+        L = self.L_form()
+
+        W_bcs = self.get_bc()
+        
+        A, b = map(ii_assemble, (a, L))
+        A, b = apply_bc(A, b, W_bcs)
+        A, b = map(ii_convert, (A, b))
+
+        
+        qp = ii_Function(W)
+        solver = LUSolver(A, "mumps")
+        solver.solve(qp.vector(), b)
+        
+        
+        return qp
+
+
+
+
 RT = {
     "flux_space": "CG",
     "flux_degree": 1,
@@ -53,9 +128,9 @@ RT = {
 }
 
 
-class MixedHydraulicNetwork:
+class DualHydraulicNetwork:
     """
-    Bilinear forms a and L for the hydraulic equations
+    Bilinear forms a and L for the dual mixed form of the hydraulic equations
             Res*q + d/ds p = g
             d/ds q = f
     on graph G, with bifurcation conditions q_in = q_out and continuous
@@ -287,6 +362,21 @@ class MixedHydraulicNetwork:
             L[n_edges + 1 + i] += Constant(0) * xis[i] * dx
 
         return L
+    
+    def solve(self):
+        
+        W = self.W
+        a = self.a_form()
+        L = self.L_form()
+
+        A, b = map(ii_assemble, (a, L))
+        A, b = map(ii_convert, (A, b))
+
+        qp = ii_Function(W)
+        solver = LUSolver(A, "mumps")
+        solver.solve(qp.vector(), b)
+        
+        return qp
 
 
 TH = {
@@ -294,10 +384,11 @@ TH = {
     "flux_degree": 2,
     "pressure_space": "CG",
     "pressure_degree": 1,
-}
+}   
 
 
-class NetworkStokes(MixedHydraulicNetwork):
+
+class NetworkStokes(DualHydraulicNetwork):
     """
     Bilinear forms a and L for the hydraulic equations
             R*q + d^2/ds^2 q + d/ds p = g

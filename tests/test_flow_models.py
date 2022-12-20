@@ -9,7 +9,7 @@ from graphnics import *
 
 def test_mass_conservation():
     """
-    Test mass conservation of hydraulic network model at bifurcation points
+    Test mass conservation of dual hydraulic network model at bifurcation points
     """
 
     tests = {
@@ -62,6 +62,25 @@ def test_mass_conservation():
             ), f"Mass is not conserved at bifurcation {b} for {test_name}"
 
 
+def test_hydraulic_network():
+    """
+    Test mixed hydraulic network model against manufactured solution on 
+    """
+
+    G = make_Y_bifurcation()
+
+    model = HydraulicNetwork(G, p_bc = Expression('-x[1]', degree=2))
+    q, p = model.solve()
+    
+    # Check mass conservation
+    assert near(q(0,0), q(0.5, 1)+q(-0.5, 1), 1e-3)
+
+    # Check that pressure bcs were applied
+    assert near(p(0,0), 0)
+    assert near(p(0.5, 1), -1)
+    
+    
+    
 def test_network_stokes():
     """'
     Test network stokes model against manufacture solution on single edge graph

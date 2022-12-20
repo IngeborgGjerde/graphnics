@@ -69,7 +69,7 @@ def test_hydraulic_network():
 
     G = make_Y_bifurcation()
 
-    model = HydraulicNetwork(G, p_bc = Expression('-x[1]', degree=2))
+    model = PrimalMixedHydraulicNetwork(G, p_bc = Expression('-x[1]', degree=2))
     q, p = model.solve()
     
     # Check mass conservation

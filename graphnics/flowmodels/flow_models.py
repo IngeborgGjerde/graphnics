@@ -46,7 +46,7 @@ class NetworkPoisson:
 
 
 
-class HydraulicNetwork:
+class PrimalMixedHydraulicNetwork:
     """
     Bilinear forms a and L for the hydraulic equations
             Res*q + d/ds p = g
@@ -128,7 +128,7 @@ RT = {
 }
 
 
-class DualHydraulicNetwork:
+class MixedHydraulicNetwork:
     """
     Bilinear forms a and L for the dual mixed form of the hydraulic equations
             Res*q + d/ds p = g
@@ -388,7 +388,7 @@ TH = {
 
 
 
-class NetworkStokes(DualHydraulicNetwork):
+class NetworkStokes(MixedHydraulicNetwork):
     """
     Bilinear forms a and L for the hydraulic equations
             R*q + d^2/ds^2 q + d/ds p = g

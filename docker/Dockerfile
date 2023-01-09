@@ -11,6 +11,7 @@ RUN apt-get -y install python3-h5py && \
     pip install --upgrade pip && \
     pip install networkx && \
     pip install pandas && \
+    pip install vtk && \
     pip install tqdm && \
     pip install seaborn && \
     pip install --no-cache-dir notebook jupyterlab jupyterhub && \

@@ -34,8 +34,8 @@ def time_stepping_stokes(
         qp_n = ii_Function(model.W)  # initialize as zero
 
     # split out the components
-    qs = model.qp[: model.G.num_edges]
-    vs = model.vphi[: model.G.num_edges]
+    qs = model.qp[: model.num_flux_spaces]
+    vs = model.vphi[: model.num_flux_spaces]
 
     dt = T / t_steps
 

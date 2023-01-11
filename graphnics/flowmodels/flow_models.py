@@ -7,6 +7,21 @@ sys.path.append("../")
 from graphnics import *
 
 
+RT = {
+    "flux_space": "CG",
+    "flux_degree": 1,
+    "pressure_space": "DG",
+    "pressure_degree": 0,
+}
+
+
+TH = {
+    "flux_space": "CG",
+    "flux_degree": 2,
+    "pressure_space": "CG",
+    "pressure_degree": 1,
+}   
+
 class NetworkPoisson:
     """
     Bilinear forms a and L for the Poisson equation on the network
@@ -70,6 +85,8 @@ class PrimalMixedHydraulicNetwork:
 
         self.qp = list(map(TrialFunction, self.W))
         self.vphi = list(map(TestFunction, self.W))
+        
+        self.num_flux_spaces = 1
 
     def a_form(self):
         
@@ -79,17 +96,19 @@ class PrimalMixedHydraulicNetwork:
 
         a = [[0 for i in range(0, len(self.qp))] for j in range(0, len(self.qp))]
         
-        a[0][0] = self.Res * inner(q, v) * dx
-        a[0][1] = inner(G.dds(p), v) * dx
-        a[1][0] = inner(G.dds(phi), q) * dx
+        a[0][0] += self.Res * inner(q, v) * dx
+        a[0][1] += inner(G.dds(p), v) * dx
+        a[1][0] += inner(G.dds(phi), q) * dx
 
         return a
+
 
     def L_form(self):
         v, phi = self.vphi
         L = [0, 0]
         L[0] = Constant(0)*v*dx
-        L[1] = self.f*phi*dx 
+        L[1] = self.f*phi*dx
+        
         return L
     
     def get_bc(self):
@@ -120,12 +139,6 @@ class PrimalMixedHydraulicNetwork:
 
 
 
-RT = {
-    "flux_space": "CG",
-    "flux_degree": 1,
-    "pressure_space": "DG",
-    "pressure_degree": 0,
-}
 
 
 class MixedHydraulicNetwork:
@@ -204,8 +217,13 @@ class MixedHydraulicNetwork:
         # edge contributions to form
         for i, e in enumerate(G.edges):
             dx_edge = Measure("dx", domain=G.edges[e]["submesh"])
+            
+            try: 
+                res = self.G.edges()[e]["Res"]
+            except KeyError:
+                res = Constant(1)
 
-            a[i][i] += self.G.edges()[e]["Res"] * qs[i] * vs[i] * dx_edge
+            a[i][i] += res * qs[i] * vs[i] * dx_edge
 
         return a
 
@@ -379,12 +397,6 @@ class MixedHydraulicNetwork:
         return qp
 
 
-TH = {
-    "flux_space": "CG",
-    "flux_degree": 2,
-    "pressure_space": "CG",
-    "pressure_degree": 1,
-}   
 
 
 
@@ -428,8 +440,13 @@ class NetworkStokes(MixedHydraulicNetwork):
         for i, e in enumerate(G.edges):
 
             dx_edge = Measure("dx", domain=G.edges[e]["submesh"])
-
-            Res, Ainv = [self.G.edges()[e][key] for key in ["Res", "Ainv"]]
+            
+            try: 
+                res = self.G.edges()[e]["Res"]
+                Ainv = self.G.edges()[e]["Ainv"]
+            except KeyError:
+                res = Constant(1)
+                Ainv = Constant(1)
 
             a[i][i] += Res * qs[i] * vs[i] * dx_edge
             a[i][i] += self.mu * Ainv * G.dds_i(qs[i], i) * G.dds_i(vs[i], i) * dx_edge

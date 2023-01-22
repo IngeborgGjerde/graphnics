@@ -22,7 +22,7 @@ def test_fenics_graph():
         vertex_ix = np.where((mesh_c == vertex_c).all(axis=1))[0]
         assert len(vertex_ix) == 1, "vertex coordinate is not a mesh coordinate"
 
-ded test_compute_vertex_degrees():
+def test_compute_vertex_degrees():
     G = make_Y_bifurcation()
     G.compute_vertex_degrees()
 

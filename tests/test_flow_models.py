@@ -142,7 +142,7 @@ def test_network_stokes():
 
     qa = interpolate(q, FunctionSpace(G.global_mesh, "CG", 3))
     q_error = errornorm(qh, qa)
-
+    
     assert q_error < 1e-4, "Network Stokes model not giving correct flux"
     assert p_error < 1e-4, "Network Stokes model not giving correct pressure"
 

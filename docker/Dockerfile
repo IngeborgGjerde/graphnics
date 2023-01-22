@@ -7,7 +7,9 @@ FROM ceciledc/fenics_mixed_dimensional:21-06-22
 
 USER root
 
-RUN apt-get -y install python3-h5py && \
+RUN apt-get update && \
+    apt-get -y install python3-h5py && \
+    apt install -y libgl1-mesa-glx && \
     pip install --upgrade pip && \
     pip install networkx && \
     pip install pandas && \

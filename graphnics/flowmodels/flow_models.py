@@ -442,10 +442,10 @@ class NetworkStokes(MixedHydraulicNetwork):
             dx_edge = Measure("dx", domain=G.edges[e]["submesh"])
             
             try: 
-                res = self.G.edges()[e]["Res"]
+                Res = self.G.edges()[e]["Res"]
                 Ainv = self.G.edges()[e]["Ainv"]
             except KeyError:
-                res = Constant(1)
+                Res = Constant(1)
                 Ainv = Constant(1)
 
             a[i][i] += Res * qs[i] * vs[i] * dx_edge

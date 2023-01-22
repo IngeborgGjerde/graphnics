@@ -2,6 +2,7 @@ import networkx as nx
 import numpy as np
 import random
 import copy
+from graphnics import *
 
 """
 Creation of a tree-like network
@@ -116,20 +117,20 @@ def make_arterial_tree(
 
             # direction-vector choose which vessel go to the right/left
             
-            if not direction:
+            if not directions:
                 sign1 = random.choice((-1, 1))
             else:
-                sign1 = signs[0]
-                del signs[0]
+                sign1 = directions[0]
+                del directions[0]
             sign2 = -1 * sign1
 
-            branch1 = [sign1, angle1, L1]
-            branch2 = [sign2, angle2, L2]
+            branch1 = [sign1, angle1, L1, D1]
+            branch2 = [sign2, angle2, L2, D2]
 
             parent_edge_v2 = e[1]  # vertex we want to connect to
 
             # Check that the new edge does not overlap other edges
-            for sign, angle, L in [branch1, branch2]:
+            for sign, angle, L, D in [branch1, branch2]:
                 new_node_pos = compute_vessel_endpoint(
                     previousvessel, normal(*previousvessel[1]), sign * angle, L
                 )
@@ -137,7 +138,7 @@ def make_arterial_tree(
                 all_pos = np.asarray(list(nx.get_node_attributes(G, "pos").values()))
                 intersecting_lines = 0
                 C = Point(all_pos[parent_edge_v2])
-                D = Point(new_node_pos)
+                DD = Point(new_node_pos)
 
                 non_neighbor_edges = copy.deepcopy(list(G.edges()))
 
@@ -151,13 +152,13 @@ def make_arterial_tree(
                 for v1, v2 in non_neighbor_edges:
                     A = Point(all_pos[v1])
                     B = Point(all_pos[v2])
-                    if doIntersect(A, B, C, D):
+                    if doIntersect(A, B, C, DD):
                         intersecting_lines += 1
 
 
                 #if no edges overlap with this new one
                 # we go ahead and add it
-                if intersecting_lines < 1:
+                if True: #intersecting_lines < 1:
                     new_node_ix += 1
 
                     new_edge = (e[1], new_node_ix)
@@ -167,7 +168,7 @@ def make_arterial_tree(
                     G.nodes[new_node_ix]["pos"] = new_node_pos
 
                     # Set radius
-                    G.edges[new_edge]["radius"] = D1 / 2
+                    G.edges[new_edge]["radius"] = D / 2
 
                     # Add to the pool of vessels for this generation
                     current_edges.append(new_edge)

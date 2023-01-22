@@ -16,6 +16,10 @@ The `graphnics` library solves network models using the finite element method. T
 - [Vasomotion in arterial trees](https://github.com/IngeborgGjerde/graphnics/blob/main/demo/Vasomotion%20in%20arterial%20trees.ipynb)
 - [Solving coupled 3d-1d network models](https://github.com/IngeborgGjerde/graphnics/blob/main/demo/Coupled%201d-3d.ipynb) using `fenics_ii`
 
+## Runtimes
+The library `fenics_ii` has been used for the implementation as it provides rapid and robust assembly of mixed-dimensional problems. The runtimes for the most computationally expensive model is shown here: 
+- [Profiling](https://github.com/IngeborgGjerde/graphnics/blob/main/demo/Tree%20profiling.ipynb)
+
 ## Installation
 We use `networkx` combined with the mixed-dimensional library [`fenics_ii`](https://github.com/MiroK/fenics_ii) created by Miroslav Kuchta. 
 
@@ -42,10 +46,23 @@ docker logs graphnics-container
 ```
 and enter the html-links it provides in your browser.
 
-## Paper 
+## Citation
 
 This code is currently being prepared for submission to JOSS, titled:
 
 *Graphnics: Combining networkx and FEniCS to solve network models* by Ingeborg Gjerde
 
 The paper draft can be found [here.](https://github.com/IngeborgGjerde/graphnics/blob/main/paper/joss.md)
+
+You can cite the repo using arxiv preprint
+```
+@article{graphnics2022gjerde,
+       author = {{Gjerde}, Ingeborg G.},
+        title = "{Graphnics: Combining FEniCS and NetworkX to simulate flow in complex networks}",
+      journal = {arXiv e-prints},
+         year = 2022,
+        month = dec,
+archivePrefix = {arXiv},
+       eprint = {2212.02916}}
+```
+

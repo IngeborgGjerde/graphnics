@@ -173,7 +173,37 @@ class FenicsGraph(nx.DiGraph):
                 - np.asarray(self.nodes()[v1]["pos"])
             )
             self.edges()[e]["length"] = dist
+            
+    def compute_vertex_degrees(self):
+        """
+        Compute and store the min and max weighted vertex degrees
+        """
+        
+        # Check that edge lengths have been computed
+        try:
+            e = list(self.edges())[0]
+            length = self.edges()[e]["length"]
+        except KeyError:
+            # if not we compute them now
+            self.compute_edge_lengths()
+        
+        # vertex degree = sum_i L_i/2 for all edges i connected to the vertex
+        for v in self.nodes():
+            l_v = 0
+            for e in self.in_edges(v):
+                l_v += self.edges()[e]["length"]
+                
+            for e in self.out_edges(v):
+                l_v += self.edges()[e]["length"]
 
+            self.nodes()[v]['degree'] = l_v/2
+            
+        degrees = nx.get_node_attributes(self, 'degree')
+        self.degree_min = min(degrees.values())
+        self.degree_max = max(degrees.values())
+
+            
+        
     def assign_tangents(self):
         """
         Assign a tangent vector list to each edge in the graph

@@ -228,9 +228,7 @@ class DistFromSource(UserExpression):
         # Then for each point on the graph we get the linear interpolation of the nodal values
         # of the endpoint, which is exactly the distance at that point
 
-        mesh = G_bfs.make_mesh(
-            store_mesh=False, n=0
-        )  # we don't want to overwrite a pre-existing mesh
+        mesh, mf = G_bfs.generate_mesh(n=0)
 
         V = FunctionSpace(mesh, "CG", 1)
         dist_func = Function(V)

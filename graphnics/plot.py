@@ -10,6 +10,20 @@ This allows for using the TubeFilter in paraview
 TODO: Allow for writing time-dependent functions
 '''
 
+class TubeRadius(UserExpression):
+    '''
+    Expression that evaluates FenicsGraph 'radius' at each point
+    '''
+    
+    def __init__(self, G, **kwargs):
+        self.G = G
+        super().__init__(**kwargs)
+    def eval_cell(self, value, x, cell):
+        edge_ix = self.G.mf[cell.index]
+        edge = list(self.G.edges())[edge_ix]
+        value[0] = self.G.edges()[edge]['radius']
+
+
 class TubeFile(File):
     def __init__(self, G, fname, **kwargs):
         """
@@ -22,10 +36,9 @@ class TubeFile(File):
         Usage:
         >> G = make_Y_bifurcation(dim=3)
         >> V = FunctionSpace(G.global_mesh, 'CG', 1)
-        >> radius_i = interpolate(Expression('x[1]+0.1*x[0]', degree=2), V)
         >> f_i = interpolate(Expression('x[0]', degree=2))
         >> f_i.rename('f', '0.0')
-        >> TubeFile(G, 'test.vtp') << (val, radius_i)    
+        >> TubeFile(G, 'test.vtp') << f_i  
         """
         
         f_name, f_ext = os.path.splitext(fname)
@@ -35,19 +48,21 @@ class TubeFile(File):
         self.G = G
         
         
-    def __lshift__(self, func_and_radius):
+    def __lshift__(self, func):
         """
         Write function to .vtp file
         
         Args:
-            func_and_radius (tuple):
-                - func: function to plot
-                - radius (function): network radius
+            - func: function to plot
+            - radius (function): network radius
         """
         
-        func, radius = func_and_radius
-        
         assert self.G.geom_dim==3, f'Coordinates are {self.G.geom_dim}d, they need to be 3d'
+        assert len(nx.get_edge_attributes(self.G, 'radius'))>0, 'Graph must have radius attribute'
+        
+        radius = TubeRadius(self.G, degree=2)
+        radius_i = interpolate(radius, FunctionSpace(self.G.global_mesh, 'CG', 1))
+        
         
         # Store points in vtkPoints
         coords = self.G.global_mesh.coordinates()
@@ -90,7 +105,7 @@ class TubeFile(File):
         
         # store value of function at each coordinates
         for c in coords:
-            data.InsertNextTuple([func(c)])
+            data.InsertNextTuple([radius_i(c)])
 
         linesPolyData.GetPointData().AddArray(data)
 
@@ -100,3 +115,5 @@ class TubeFile(File):
         writer.SetInputData(linesPolyData)
         writer.Update()
         writer.Write()
+        
+    

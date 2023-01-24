@@ -11,11 +11,12 @@ ENV HOME /home/${NB_USER}
 WORKDIR ${HOME}
 COPY . ${HOME}
 
-
-
 # Change ownership of home directory
 USER root
 RUN chown -R ${NB_UID} ${HOME}
+
+# install graphnics
+RUN python3 -m pip install .
 
 USER ${NB_USER}
 ENTRYPOINT []

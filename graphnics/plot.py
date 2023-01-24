@@ -6,8 +6,6 @@ import os
 '''
 Overloaded File class for writing .vtp files for functions defined on the graph
 This allows for using the TubeFilter in paraview
-
-TODO: Allow for writing time-dependent functions
 '''
 
 class TubeRadius(UserExpression):
@@ -30,22 +28,33 @@ class TubeFile(File):
         .vtp file with network function and radius, made for TubeFilter in paraview
         
         Args:
-            G (FenicsGraph): graph with mesh
+            G (FenicsGraph): graph with mesh and radius attribute on edges
             fname (str): location and name for file
             
-        Usage:
+        Example:
         >> G = make_Y_bifurcation(dim=3)
+        >> for e in G.edges():
+        >>     G.edges()[e]['radius'] = 1
         >> V = FunctionSpace(G.global_mesh, 'CG', 1)
         >> f_i = interpolate(Expression('x[0]', degree=2))
         >> f_i.rename('f', '0.0')
-        >> TubeFile(G, 'test.vtp') << f_i  
+        >> TubeFile(G, 'test.pvd') << f_i  
         """
         
         f_name, f_ext = os.path.splitext(fname)
-        assert f_ext == '.vtp', 'TubeFile must have .vtp file ending'
+        assert f_ext == '.pvd', 'TubeFile must have .pvd file ending'
         
-        self.fname = fname
+        self.fname = f_name
         self.G = G
+        
+        assert self.G.geom_dim==3, f'Coordinates are {self.G.geom_dim}d, they need to be 3d'
+        assert len(nx.get_edge_attributes(self.G, 'radius'))>0, 'Graph must have radius attribute'
+        
+        # Make pvd file containing header and footer
+        pvdfile = open(fname, "w")
+        pvdfile.write(pvd_header + pvd_footer) 
+        pvdfile.close()
+        
         
         
     def __lshift__(self, func):
@@ -53,16 +62,20 @@ class TubeFile(File):
         Write function to .vtp file
         
         Args:
-            - func: function to plot
+            - func: tuple with function and time step
+            If only function is given, time step is set to 0 
             - radius (function): network radius
         """
         
-        assert self.G.geom_dim==3, f'Coordinates are {self.G.geom_dim}d, they need to be 3d'
-        assert len(nx.get_edge_attributes(self.G, 'radius'))>0, 'Graph must have radius attribute'
-        
+        if type(func) is tuple:
+            func, i = func
+        else:
+            i = 0    
+
         radius = TubeRadius(self.G, degree=2)
-        radius_i = interpolate(radius, FunctionSpace(self.G.global_mesh, 'CG', 1))
+        radius = interpolate(radius, FunctionSpace(self.G.global_mesh, 'CG', 1))
         
+        ### Write vtp file for this time step
         
         # Store points in vtkPoints
         coords = self.G.global_mesh.coordinates()
@@ -88,6 +101,7 @@ class TubeFile(File):
 
         # Write data from associated function
         data = vtkDoubleArray()
+        
         data.SetName(func.name())
         data.SetNumberOfComponents(1)
         
@@ -105,15 +119,37 @@ class TubeFile(File):
         
         # store value of function at each coordinates
         for c in coords:
-            data.InsertNextTuple([radius_i(c)])
+            data.InsertNextTuple([radius(c)])
 
         linesPolyData.GetPointData().AddArray(data)
 
         # Write to file
         writer = vtkXMLPolyDataWriter()
-        writer.SetFileName(self.fname)
+        writer.SetFileName(f"{self.fname}{int(i):06d}.vtp")
         writer.SetInputData(linesPolyData)
         writer.Update()
         writer.Write()
         
+        
+        ### Update pvd file with vtp file for this time step
+        pvdfile = open(self.fname+ ".pvd", "r")
+        content = pvdfile.read().splitlines()
+        
+        # add entry before footer
+        pvd_entry = f"<DataSet timestep=\"{i}\" part=\"0\" file=\"{self.fname}{int(i):06d}.vtp\" />"
+        print(pvd_entry)
+        updated_content = content[:-2] + [pvd_entry] + content[-2:] 
+        updated_content = "\n".join(updated_content)# convert to string
+        
+        pvdfile = open(self.fname + '.pvd', "w")
+        pvdfile.write(updated_content)
+        pvdfile.close()
+        
+        
     
+pvd_header = """<?xml version=\"1.0\"?>
+<VTKFile type="Collection" version=\"0.1\">
+  <Collection>\n"""
+
+pvd_footer= """</Collection>
+</VTKFile>"""

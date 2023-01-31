@@ -7,20 +7,6 @@ sys.path.append("../")
 from graphnics import *
 
 
-RT = {
-    "flux_space": "CG",
-    "flux_degree": 1,
-    "pressure_space": "DG",
-    "pressure_degree": 0,
-}
-
-
-TH = {
-    "flux_space": "CG",
-    "flux_degree": 2,
-    "pressure_space": "CG",
-    "pressure_degree": 1,
-}   
 
 class NetworkPoisson:
     """
@@ -60,7 +46,6 @@ class NetworkPoisson:
         return bc
 
 
-
 class PrimalMixedHydraulicNetwork:
     """
     Bilinear forms a and L for the hydraulic equations
@@ -69,13 +54,14 @@ class PrimalMixedHydraulicNetwork:
     on graph G, with bifurcation conditions q_in = q_out and continuous pressure
     """
 
-    def __init__(self, G, f=Constant(0), p_bc=Constant(0), Res=Constant(1), degree=1):
+    def __init__(self, G, f=Constant(0), g = Constant(0), p_bc=Constant(0), Res=Constant(1), degree=1):
 
         # Graph on which the model lives
         self.G = G
 
         # Model parameters
         self.f = f
+        self.g = g
         self.p_bc = p_bc
         self.Res = Res
 
@@ -139,6 +125,22 @@ class PrimalMixedHydraulicNetwork:
 
 
 
+# Network Raviart-Thomas type space, appropriate for the dual mixed hydraulic model
+RT = {
+    "flux_space": "CG",
+    "flux_degree": 1,
+    "pressure_space": "DG",
+    "pressure_degree": 0,
+}
+
+
+# Network Raviart-Thomas type space, appropriate for the dual mixed Stokes model
+TH = {
+    "flux_space": "CG",
+    "flux_degree": 2,
+    "pressure_space": "CG",
+    "pressure_degree": 1,
+}
 
 
 class MixedHydraulicNetwork:
@@ -156,7 +158,7 @@ class MixedHydraulicNetwork:
         p_bc (df.expr): pressure boundary condition
     """
 
-    def __init__(self, G, f=Constant(0), p_bc=Constant(0), space=RT):
+    def __init__(self, G, f=Constant(0), g = Constant(0), p_bc=Constant(0), space=RT):
         """
         Set up function spaces and store model parameters f and ns
         """
@@ -167,6 +169,7 @@ class MixedHydraulicNetwork:
         # Model parameters
 
         self.f = f
+        self.g = g
         self.p_bc = p_bc
 
         # Setup function spaces:
@@ -198,7 +201,9 @@ class MixedHydraulicNetwork:
         self.qp = list(map(TrialFunction, W))
         self.vphi = list(map(TestFunction, W))
 
-    def diag_a_form_on_edges(self, a=None):
+
+
+    def a_form(self, a=None):
         """
         Add edge contributions to the bilinear form
         """
@@ -208,13 +213,21 @@ class MixedHydraulicNetwork:
 
         qp, vphi = self.qp, self.vphi
         G = self.G
+        
 
         # split out the components
         n_edges = G.num_edges
 
         qs, vs = qp[:n_edges], vphi[:n_edges]
+        p, phi = qp[n_edges], vphi[n_edges]
+        lams, xis = qp[n_edges+1:], vphi[n_edges+1:]
 
-        # edge contributions to form
+        # get submeshes and restriction of p to edge
+        submeshes = list(nx.get_edge_attributes(G, "submesh").values())
+        ps = [Restriction(p, msh) for msh in submeshes]
+        phis = [Restriction(phi, msh) for msh in submeshes]
+
+        # add edge terms
         for i, e in enumerate(G.edges):
             dx_edge = Measure("dx", domain=G.edges[e]["submesh"])
             
@@ -224,60 +237,14 @@ class MixedHydraulicNetwork:
                 res = Constant(1)
 
             a[i][i] += res * qs[i] * vs[i] * dx_edge
-
-        return a
-
-    def offdiag_a_form_on_edges(self, a=None):
-        """
-        Add edge contributions to the bilinear form
-        """
-
-        if not a:
-            a = self.init_a_form()
-
-        qp, vphi = self.qp, self.vphi
-        G = self.G
-
-        # split out the components
-        n_edges = G.num_edges
-
-        qs, vs = qp[:n_edges], vphi[:n_edges]
-        p, phi = qp[n_edges], vphi[n_edges]
-
-        submeshes = list(nx.get_edge_attributes(G, "submesh").values())
-        ps = [Restriction(p, msh) for msh in submeshes]
-        phis = [Restriction(phi, msh) for msh in submeshes]
-
-        # edge contributions to form
-        for i, e in enumerate(G.edges):
-
-            dx_edge = Measure("dx", domain=G.edges[e]["submesh"])
-
+            
             a[n_edges][i] += +G.dds_i(qs[i], i) * phis[i] * dx_edge
             a[i][n_edges] += -ps[i] * G.dds_i(vs[i], i) * dx_edge
-
-        return a
-
-    def a_form_on_bifs(self, a=None):
-        """
-        Bifurcation point contributions to bilinear form a
-        """
-
-        if not a:
-            a = self.init_a_form()
-
-        qp, vphi = self.qp, self.vphi
-        G = self.G
-
-        # split out the components
-        n_edges = G.num_edges
-
-        qs, lams = qp[0:n_edges], qp[n_edges + 1 :]
-        vs, xis = vphi[0:n_edges], vphi[n_edges + 1 :]
-
+            
+            
+        # add vertex terms
         edge_list = list(G.edges.keys())
-
-        # bifurcation condition contributions to form
+        
         for b_ix, b in enumerate(G.bifurcation_ixs):
 
             # make info dict of edges connected to this bifurcation
@@ -318,20 +285,6 @@ class MixedHydraulicNetwork:
 
         return a
 
-    def a_form(self):
-        """
-        The bilinear form
-
-        Args:
-            Res (dict): dictionary with edge->resistance
-        """
-
-        a = self.init_a_form()
-        a = self.diag_a_form_on_edges(a)
-        a = self.offdiag_a_form_on_edges(a)
-        a = self.a_form_on_bifs(a)
-
-        return a
 
     def init_L_form(self):
         """
@@ -344,8 +297,10 @@ class MixedHydraulicNetwork:
         for i, msh in enumerate(self.meshes):
             dx = Measure("dx", domain=msh)
             L[i] += Constant(0) * self.vphi[i] * dx
+            
 
         return L
+    
 
     def L_form(self):
         """
@@ -363,19 +318,18 @@ class MixedHydraulicNetwork:
         submeshes = list(nx.get_edge_attributes(self.G, "submesh").values())
         phis = [Restriction(phi, msh) for msh in submeshes]
         fs = [project(self.f, FunctionSpace(msh, 'CG', 1)) for msh in submeshes]
+        gs = [project(self.g, FunctionSpace(msh, 'CG', 1)) for msh in submeshes]
         
         # Assemble edge contributions to a and L
         for i, e in enumerate(self.G.edges):
-            ds_edge = Measure(
-                "ds",
-                domain=self.G.edges[e]["submesh"],
-                subdomain_data=self.G.edges[e]["vf"],
-            )
+            ds_edge = Measure("ds", domain=self.G.edges[e]["submesh"], subdomain_data=self.G.edges[e]["vf"])
             dx_edge = Measure("dx", domain=self.G.edges[e]["submesh"])
 
             L[i] += self.p_bc * vs[i] * ds_edge(BOUN_OUT) - self.p_bc * vs[i] * ds_edge(BOUN_IN)
+            L[i] += gs[i] * vs[i] * dx_edge
+            
             L[n_edges] += fs[i] * phis[i] * dx_edge
-
+            
         for i in range(0, len(self.G.bifurcation_ixs)):
             L[n_edges + 1 + i] += Constant(0) * xis[i] * dx
 
@@ -396,59 +350,3 @@ class MixedHydraulicNetwork:
         
         return qp
 
-
-
-
-
-class NetworkStokes(MixedHydraulicNetwork):
-    """
-    Bilinear forms a and L for the hydraulic equations
-            R*q + d^2/ds^2 q + d/ds p = g
-            d/ds q = f
-    on graph G, with bifurcation conditions q_in = q_out and continuous
-    normal stress
-
-    Args:
-        G (FenicsGraph): Network domain
-        Res (dict): dictionary with edge->resistance
-        nu (df.expr): viscosity
-        f (df.expr): source term
-        p_bc (df.expr): pressure boundary condition
-    """
-
-    def __init__(self, G, mu=Constant(1), f=Constant(0), p_bc=Constant(0), space=TH):
-        self.mu = mu
-        super().__init__(G, f, p_bc, space)
-
-    def diag_a_form_on_edges(self, a=None):
-        """
-        The bilinear form
-        """
-
-        if not a:
-            a = self.init_a_form()
-
-        qp, vphi = self.qp, self.vphi
-        G = self.G
-
-        # split out the components
-        n_edges = G.num_edges
-
-        qs, vs = qp[0:n_edges], vphi[0:n_edges]
-
-        # edge contributions to form
-        for i, e in enumerate(G.edges):
-
-            dx_edge = Measure("dx", domain=G.edges[e]["submesh"])
-            
-            try: 
-                Res = self.G.edges()[e]["Res"]
-                Ainv = self.G.edges()[e]["Ainv"]
-            except KeyError:
-                Res = Constant(1)
-                Ainv = Constant(1)
-
-            a[i][i] += Res * qs[i] * vs[i] * dx_edge
-            a[i][i] += self.mu * Ainv * G.dds_i(qs[i], i) * G.dds_i(vs[i], i) * dx_edge
-
-        return a

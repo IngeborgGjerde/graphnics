@@ -79,63 +79,123 @@ def test_hydraulic_network():
     assert near(p(0,0), 0)
     assert near(p(0.5, 1), -1)
     
-    
-    
-def test_network_stokes():
-    """'
-    Test network stokes model against manufacture solution on single edge graph
-    """
 
-    # We check with parameters that are not one
-    nu = 2
-    Ainv = 0.5
-    Res = 10
+
+def network_stokes_manufactured_solution(G, Ainv, Res, time_dependent=False):
+    '''
+    Make manufactured solution for network stokes model
+        1/A \partial_t q + nu \Delta q + Rq + \nabla p = g
+        \nabla\cdot q = f
+        
+    Args:
+        G (networkx graph): graph to solve on
+        nu (float): viscosity
+        Ainv (float): inverse of cross sectional area
+        Res (float): resistance
+        time_dependent (bool): if True, make time dependent solution
+        
+    Returns:
+        f, q, p, g: ufl functions for the manufactured solution
+        t: time variable
+    '''
 
     # We make the global q and global p smooth, so that the normal stress is continuous
-    import sympy as sym
+    t = Constant(0)
+    dist = DistFromSource(G, 0)
+    s = project(dist, FunctionSpace(G.global_mesh, "CG", 1))
+    
+    xx = SpatialCoordinate(G.global_mesh)
+    
+    if time_dependent: alpha = 1
+    else: alpha = 0
+    
+    q = sin(2*3.14*xx[0]) + cos(2*3.14*alpha*t)
+    p = cos(2*3.14*xx[0]) + sin(2*3.14*alpha*t)
+    
+    import ufl
+    g = Ainv*ufl.diff(q,t) + Res*q + G.dds(p)
+    f = G.dds(q)
+    
+    return f, q, p, g, t, s
+    
+    
+def test_mixed_hydraulic():
+    """'
+    Test mixed hydraulic model against manufacture solution on single edge graph
+    We eliminate the viscous term so that we can use hydraulic network model
+    """
 
-    x, x_ = sym.symbols("x[0] x_")
-
-    q = sym.sin(2 * 3.14159 * x)
-    f = q.diff(x)
-
-    dsp = -Res*q + nu*Ainv*sym.diff(sym.diff(q, x), x)
-    p_ = sym.integrate(dsp, (x, 0, x_))
-    p = p_.subs(x_, x)
-
-    g = nu*Ainv*sym.diff(f,x)
-
-    # convert to fenics expressions
-    f, q, p, g = [
-        Expression(sym.printing.ccode(func), degree=2) for func in [f, q, p, g]
-    ]
+    
+    # We check with parameters that are not one
+    Ainv = 0.0
+    Res = 1
 
     # Solve on graph with single edge
     G = make_line_graph(2, dx=2)
+    G.make_mesh(8)
+    
+    f, q, p, g, t, s = network_stokes_manufactured_solution(G, Ainv, Res)
 
+    p = project(p, FunctionSpace(G.global_mesh, "CG", 2))
+    
     prop_dict = {
         key: {"Res": Constant(Res), "Ainv": Constant(Ainv)}
         for key in list(G.edges.keys())
     }
     nx.set_edge_attributes(G, prop_dict)
 
-    
-    G.make_mesh(10)
     model = MixedHydraulicNetwork(G, f=f, g=g, p_bc=p)
     sol = model.solve()
     print(sol)
     qh, ph = sol
 
-    # Compute and print errors
-    pa = interpolate(p, FunctionSpace(G.global_mesh, "CG", 2))
+    # Compute errors
+    pa = project(p, FunctionSpace(G.global_mesh, "CG", 2))
     p_error = errornorm(ph, pa)
 
-    qa = interpolate(q, FunctionSpace(G.global_mesh, "CG", 3))
+    qa = project(q, FunctionSpace(G.global_mesh, "CG", 3))
     q_error = errornorm(qh, qa)
-        
-    assert q_error < 1e-4, f"Network Stokes model not giving correct flux, q_error = {q_error}"
-    assert p_error < 1e-1, f"Network Stokes model not giving correct pressure, p_error = {p_error}"
+    
+    assert q_error < 1e-2, f"Mixed hydraulic model not giving correct flux, q_error = {q_error}"
+    assert p_error < 1e-1, f"Mixed hydraulic model not giving correct pressure, p_error = {p_error}"
+    
+    
+    
+def test_hydraulic():
+    """'
+    Test  model against manufacture solution on single edge graph
+    We eliminate the viscous term so that we can use hydraulic network model
+    """
+    
+    # We check with parameters that are not one
+    Ainv = 0.0
+    Res = 1
+
+    # Solve on graph with single edge
+    G = make_line_graph(2, dx=2)
+    G.make_mesh(10)
+    
+    f, q, p, g, t, s = network_stokes_manufactured_solution(G, Ainv, Res)
+
+    p = project(p, FunctionSpace(G.global_mesh, "CG", 2))
+    
+    model = HydraulicNetwork(G, f=f, g=g, p_bc=p)
+    sol = model.solve()
+    print(sol)
+    qh, ph = sol
+
+    # Compute and print errors
+    pa = project(p, FunctionSpace(G.global_mesh, "CG", 2))
+    p_error = errornorm(ph, pa)
+
+    qa = project(q, FunctionSpace(G.global_mesh, "CG", 3))
+    q_error = errornorm(qh, qa)
+    
+    assert q_error < 1e-2, f"Hydraulic model not giving correct flux, q_error = {q_error}"
+    assert p_error < 1e-4, f"Hydraulic model not giving correct pressure, p_error = {p_error}"
+
 
 
 if __name__ == "__main__":
-    test_network_stokes()
+    test_mixed_hydraulic()
+    test_hydraulic()

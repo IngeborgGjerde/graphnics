@@ -2,8 +2,6 @@ import networkx as nx
 from fenics import *
 from xii import *
 import sys
-
-sys.path.append("../")
 from graphnics import *
 
 
@@ -46,7 +44,7 @@ class NetworkPoisson:
         return bc
 
 
-class PrimalMixedHydraulicNetwork:
+class HydraulicNetwork:
     """
     Bilinear forms a and L for the hydraulic equations
             Res*q + d/ds p = g
@@ -72,8 +70,6 @@ class PrimalMixedHydraulicNetwork:
         self.qp = list(map(TrialFunction, self.W))
         self.vphi = list(map(TestFunction, self.W))
         
-        self.num_flux_spaces = 1
-
     def a_form(self):
         
         G = self.G
@@ -84,7 +80,7 @@ class PrimalMixedHydraulicNetwork:
         
         a[0][0] += self.Res * inner(q, v) * dx
         a[0][1] += inner(G.dds(p), v) * dx
-        a[1][0] += inner(G.dds(phi), q) * dx
+        a[1][0] -= inner(G.dds(phi), q) * dx
 
         return a
 
@@ -92,7 +88,7 @@ class PrimalMixedHydraulicNetwork:
     def L_form(self):
         v, phi = self.vphi
         L = [0, 0]
-        L[0] = Constant(0)*v*dx
+        L[0] = self.g*v*dx
         L[1] = self.f*phi*dx
         
         return L
@@ -131,15 +127,6 @@ RT = {
     "flux_degree": 1,
     "pressure_space": "DG",
     "pressure_degree": 0,
-}
-
-
-# Network Raviart-Thomas type space, appropriate for the dual mixed Stokes model
-TH = {
-    "flux_space": "CG",
-    "flux_degree": 2,
-    "pressure_space": "CG",
-    "pressure_degree": 1,
 }
 
 
@@ -325,7 +312,7 @@ class MixedHydraulicNetwork:
             ds_edge = Measure("ds", domain=self.G.edges[e]["submesh"], subdomain_data=self.G.edges[e]["vf"])
             dx_edge = Measure("dx", domain=self.G.edges[e]["submesh"])
 
-            L[i] += self.p_bc * vs[i] * ds_edge(BOUN_OUT) - self.p_bc * vs[i] * ds_edge(BOUN_IN)
+            L[i] -= self.p_bc * vs[i] * ds_edge(BOUN_OUT) - self.p_bc * vs[i] * ds_edge(BOUN_IN)
             L[i] += gs[i] * vs[i] * dx_edge
             
             L[n_edges] += fs[i] * phis[i] * dx_edge

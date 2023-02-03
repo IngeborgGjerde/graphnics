@@ -69,7 +69,7 @@ def test_hydraulic_network():
 
     G = make_Y_bifurcation()
 
-    model = PrimalMixedHydraulicNetwork(G, p_bc = Expression('-x[1]', degree=2))
+    model = HydraulicNetwork(G, p_bc = Expression('-x[1]', degree=2))
     q, p = model.solve()
     
     # Check mass conservation
@@ -81,42 +81,32 @@ def test_hydraulic_network():
     
 
 
-def network_stokes_manufactured_solution(G, Ainv, Res, time_dependent=False):
+def hydraulic_manufactured_solution(G, Ainv, Res):
     '''
-    Make manufactured solution for network stokes model
-        1/A \partial_t q + nu \Delta q + Rq + \nabla p = g
+    Make manufactured solution for hydraulic network model
+        Rq + \nabla p = g
         \nabla\cdot q = f
         
     Args:
         G (networkx graph): graph to solve on
-        nu (float): viscosity
         Ainv (float): inverse of cross sectional area
         Res (float): resistance
-        time_dependent (bool): if True, make time dependent solution
         
     Returns:
         f, q, p, g: ufl functions for the manufactured solution
         t: time variable
     '''
 
-    # We make the global q and global p smooth, so that the normal stress is continuous
-    t = Constant(0)
-    dist = DistFromSource(G, 0)
-    s = project(dist, FunctionSpace(G.global_mesh, "CG", 1))
-    
     xx = SpatialCoordinate(G.global_mesh)
     
-    if time_dependent: alpha = 1
-    else: alpha = 0
+    # some nice manufactured solution
+    q = sin(2*3.14*xx[0])
+    p = cos(2*3.14*xx[0])
     
-    q = sin(2*3.14*xx[0]) + cos(2*3.14*alpha*t)
-    p = cos(2*3.14*xx[0]) + sin(2*3.14*alpha*t)
-    
-    import ufl
-    g = Ainv*ufl.diff(q,t) + Res*q + G.dds(p)
+    g = Res*q + G.dds(p)
     f = G.dds(q)
     
-    return f, q, p, g, t, s
+    return f, q, p, g
     
     
 def test_mixed_hydraulic():
@@ -134,7 +124,7 @@ def test_mixed_hydraulic():
     G = make_line_graph(2, dx=2)
     G.make_mesh(8)
     
-    f, q, p, g, t, s = network_stokes_manufactured_solution(G, Ainv, Res)
+    f, q, p, g = hydraulic_manufactured_solution(G, Ainv, Res)
 
     p = project(p, FunctionSpace(G.global_mesh, "CG", 2))
     
@@ -175,7 +165,7 @@ def test_hydraulic():
     G = make_line_graph(2, dx=2)
     G.make_mesh(10)
     
-    f, q, p, g, t, s = network_stokes_manufactured_solution(G, Ainv, Res)
+    f, q, p, g = hydraulic_manufactured_solution(G, Ainv, Res)
 
     p = project(p, FunctionSpace(G.global_mesh, "CG", 2))
     

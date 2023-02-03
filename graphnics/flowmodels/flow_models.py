@@ -306,13 +306,14 @@ class MixedHydraulicNetwork:
         phis = [Restriction(phi, msh) for msh in submeshes]
         fs = [project(self.f, FunctionSpace(msh, 'CG', 1)) for msh in submeshes]
         gs = [project(self.g, FunctionSpace(msh, 'CG', 1)) for msh in submeshes]
+        p_bcs = [project(self.p_bc, FunctionSpace(msh, 'CG', 1)) for msh in submeshes]
         
         # Assemble edge contributions to a and L
         for i, e in enumerate(self.G.edges):
             ds_edge = Measure("ds", domain=self.G.edges[e]["submesh"], subdomain_data=self.G.edges[e]["vf"])
             dx_edge = Measure("dx", domain=self.G.edges[e]["submesh"])
 
-            L[i] -= self.p_bc * vs[i] * ds_edge(BOUN_OUT) - self.p_bc * vs[i] * ds_edge(BOUN_IN)
+            L[i] -= p_bcs[i]*vs[i]*ds_edge(BOUN_OUT) - self.p_bc*vs[i]*ds_edge(BOUN_IN)
             L[i] += gs[i] * vs[i] * dx_edge
             
             L[n_edges] += fs[i] * phis[i] * dx_edge
@@ -321,6 +322,9 @@ class MixedHydraulicNetwork:
             L[n_edges + 1 + i] += Constant(0) * xis[i] * dx
 
         return L
+    
+    def get_bc(self):
+        return [[], []]
     
     def solve(self):
         

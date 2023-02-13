@@ -23,6 +23,8 @@ def test_mass_conservation():
         G = tests[test_name]
 
         G.make_mesh(5)
+        G.make_submeshes()
+ 
         prop_dict = {
             key: {"Res": Constant(1), "Ainv": Constant(1)}
             for key in list(G.edges.keys())
@@ -68,7 +70,8 @@ def test_hydraulic_network():
     """
 
     G = make_Y_bifurcation()
-
+    G.make_mesh(6)
+    
     model = HydraulicNetwork(G, p_bc = Expression('-x[1]', degree=2))
     q, p = model.solve()
     
@@ -123,6 +126,7 @@ def test_mixed_hydraulic():
     # Solve on graph with single edge
     G = make_line_graph(2, dx=2)
     G.make_mesh(8)
+    G.make_submeshes()
     
     f, q, p, g = hydraulic_manufactured_solution(G, Ainv, Res)
 

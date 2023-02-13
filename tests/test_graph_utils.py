@@ -11,6 +11,7 @@ def test_graph_color():
 
     # Check that a line graph gets all the same color
     G = make_line_graph(3)
+    
     color_graph(G)
     assert G.edges()[(0, 1)]["color"] == G.edges()[(1, 2)]["color"]
 

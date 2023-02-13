@@ -90,6 +90,7 @@ def test_time_stepping_mixed_hydraulic():
     
     G = make_line_graph(2)
     G.make_mesh(5)
+    G.make_submeshes()
     
     Ainv = 2
     Res = 10

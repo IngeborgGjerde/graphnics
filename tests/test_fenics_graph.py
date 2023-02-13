@@ -31,6 +31,7 @@ def test_tangent_vector():
     # Make simple y-bifurcation
     G = make_Y_bifurcation()
     G.make_mesh(n=3)
+    G.make_submeshes()
     
     # Check that the first edge has tangent (0,1)
     first_tangent = G.edges()[(0,1)]['tangent']

@@ -35,7 +35,7 @@ class FenicsGraph(nx.DiGraph):
         nx.DiGraph.__init__(self)
 
 
-    def generate_mesh(self, n=1):
+    def get_mesh(self, n=1):
         """
         Returns a fenics mesh on the graph with 2^n cells on each edge
 
@@ -79,7 +79,7 @@ class FenicsGraph(nx.DiGraph):
         return mesh, mf
 
     
-    def make_mesh(self, n=1, make_edgemeshes = True):
+    def make_mesh(self, n=1):
         """
         Generates and stores a fenics mesh on the graph with 2^n cells on each edge
 
@@ -98,7 +98,7 @@ class FenicsGraph(nx.DiGraph):
         
                 
         # Store refined global mesh and refined mesh function marking branches
-        mesh, mf = self.generate_mesh(n)
+        mesh, mf = self.get_mesh(n)
         self.global_mesh = mesh
         self.mf = mf
         
@@ -107,32 +107,35 @@ class FenicsGraph(nx.DiGraph):
         
         # Compute tangent vectors
         self.assign_tangents()
+        
+    
+    def make_submeshes(self):
+        """
+        Generates and stores submeshes for each edge
+        """
 
-        
-        if make_edgemeshes:
-        
-            # Make and store one submesh for each edge
-            for i, (u, v) in enumerate(self.edges):
-                self.edges[u, v]["submesh"] = EmbeddedMesh(mf, i)
-                
-            # Initialize meshfunction for each edge
-            for e in self.edges():
-                msh = self.edges[e]["submesh"]
-                vf = MeshFunction("size_t", msh, 0, 0)
-                self.edges[e]["vf"] = vf
+        # Make and store one submesh for each edge
+        for i, (u, v) in enumerate(self.edges):
+            self.edges[u, v]["submesh"] = EmbeddedMesh(self.mf, i)
             
-            # Give each edge a Meshfunction that marks the vertex if its a boundary node
-            # or a bifurcation node
-            # A bifurcation node is tagged BIF_IN if the edge points into it or BIF_OUT if the edge points out of it
-            # A boundary node is tagged BOUN_IN if the edge points into it or BOUN_OUT if the edge points out of it
+        # Initialize meshfunction for each edge
+        for e in self.edges():
+            msh = self.edges[e]["submesh"]
+            vf = MeshFunction("size_t", msh, 0, 0)
+            self.edges[e]["vf"] = vf
+        
+        # Give each edge a Meshfunction that marks the vertex if its a boundary node
+        # or a bifurcation node
+        # A bifurcation node is tagged BIF_IN if the edge points into it or BIF_OUT if the edge points out of it
+        # A boundary node is tagged BOUN_IN if the edge points into it or BOUN_OUT if the edge points out of it
 
-            # Mark the meshfunction belonging to each edge with
-            # - BIF_IN/BIF_OUT if the vertex belongs to an edge that goes in/out of the bif node
-            self.mark_edge_vfs(self.bifurcation_ixs, BIF_IN, BIF_OUT)
-            # - BOUN_OUT/BOUN_IN if the vertex is an inlet or outlet point
-            self.mark_edge_vfs(self.boundary_ixs, BOUN_OUT, BOUN_IN)
-            # Note: We need to reverse our notation here so that BOUN_OUT is applied to
-            # edges going into a boundary node (which is actually an outlet)
+        # Mark the meshfunction belonging to each edge with
+        # - BIF_IN/BIF_OUT if the vertex belongs to an edge that goes in/out of the bif node
+        self.mark_edge_vfs(self.bifurcation_ixs, BIF_IN, BIF_OUT)
+        # - BOUN_OUT/BOUN_IN if the vertex is an inlet or outlet point
+        self.mark_edge_vfs(self.boundary_ixs, BOUN_OUT, BOUN_IN)
+        # Note: We need to reverse our notation here so that BOUN_OUT is applied to
+        # edges going into a boundary node (which is actually an outlet)
 
         
     def record_bifurcation_and_boundary_nodes(self):

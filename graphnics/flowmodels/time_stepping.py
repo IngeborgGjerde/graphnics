@@ -117,7 +117,7 @@ class TimeDepMixedHydraulicNetwork(MixedHydraulicNetwork):
 
 
 def time_stepping_stokes(
-    model, t=Constant(0), t_steps=10, T=1, qp_n=None, t_step_scheme="IE"
+    model, t=Constant(0), t_steps=10, T=1, qp0=None, t_step_scheme="IE", reassemble=True
 ):
     """
     Do time stepping for models of the type
@@ -131,20 +131,21 @@ def time_stepping_stokes(
         T (float): end time
         qp_n (ii_function): initial solution
         t_step_scheme (str): 'IE' for Implicit Euler or 'CN' for Crank-Nicholson
+        reassemble (bool): reassemble matrices at each time step
         
     The model parameters can be expressions depending on class attribute t
     or ufl functions depending on the Constant t.
     """
 
-    if qp_n is None:
-        qp_n = ii_Function(model.W)  # initialize as zero
+    if qp0 is None:
+        qp0 = ii_Function(model.W)  # initialize as zero
 
     dt = T / t_steps # time step size
     cn, cn1 = time_stepping_schemes[t_step_scheme].values() # Runge Kutta coefficients
     
     
     Dn1 = model.mass_matrix_q(model.Ainv)
-    Dn = model.mass_vector_q(qp_n, model.Ainv)
+    Dn = model.mass_vector_q(qp0, model.Ainv)
     
     a, L = model.a_form(), model.L_form()
 
@@ -153,22 +154,24 @@ def time_stepping_stokes(
     # Finally we time step
     qp_0 = ii_Function(model.W)
     for i, qp0_comp in enumerate(qp_0):
-        qp0_comp.vector()[:] = interpolate(qp_n[i], model.W[i]).vector().get_local()
-
+        qp0_comp.vector()[:] = project(qp0[i], model.W[i]).vector().get_local()
+    qp0 = qp_0
+    
     qps = [qp_0]
 
     
     An, Ln, DDn = [ii_assemble(term) for term in [a, L, Dn]]
+
     t.assign(dt)
     
     #for t_val in tqdm(np.linspace(dt, T, t_steps - 1)):
     for t_val in np.linspace(dt, T, t_steps - 1):   
         
         An1, Ln1, DDn1 = [ii_assemble(term) for term in [a, L, Dn1]]
-        
+            
         # Assemble and solve the system at the current time step
         A = (DDn1 + cn1*dt*An1)
-        b = (DDn + cn1*dt*Ln1 - dt*cn*An*qp_n.block_vec() + dt*cn*Ln)
+        b = (DDn + cn1*dt*Ln1 - dt*cn*An*qp0.block_vec() + dt*cn*Ln)
 
         A = A.block_collapse()
         A, b = apply_bc(A, b, model.get_bc())
@@ -178,11 +181,13 @@ def time_stepping_stokes(
         solver.solve(qpn1.vector(), b)
 
         # Store solution
-        qps.append(qpn1)
-
+        sol = ii_Function(model.W)
+        [sol[i].assign(func) for i, func in enumerate(qpn1)]
+                
+        qps.append(sol)
         # Prepare for next time step        
         # - update qp_n
-        [qp_n[i].assign(func) for i, func in enumerate(qpn1)]
+        [qp0[i].assign(func) for i, func in enumerate(qpn1)]
 
         # 1) update time
         t.assign(t_val+dt) #in case one of the model parameters are ufl type
@@ -193,11 +198,11 @@ def time_stepping_stokes(
                 func.t = t_val+dt 
             except AttributeError:
                 pass # if this is a ufl function it won't have a t attribute        
-                
+        
         # 2) update matrices
         An = An1.copy()
         Ln = Ln1.copy() #TODO: this does not work if parameters are expressions!
-        DDn = DDn1*qp_n.block_vec()
+        DDn = DDn1*qp0.block_vec()
         
         a = model.a_form()
         L = model.L_form()

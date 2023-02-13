@@ -87,6 +87,7 @@ class HydraulicNetwork:
 
     def L_form(self):
         v, phi = self.vphi
+        dx = Measure("dx", domain=self.G.global_mesh)
         L = [0, 0]
         L[0] = self.g*v*dx
         L[1] = self.f*phi*dx
@@ -304,6 +305,7 @@ class MixedHydraulicNetwork:
 
         submeshes = list(nx.get_edge_attributes(self.G, "submesh").values())
         phis = [Restriction(phi, msh) for msh in submeshes]
+        
         fs = [project(self.f, FunctionSpace(msh, 'CG', 1)) for msh in submeshes]
         gs = [project(self.g, FunctionSpace(msh, 'CG', 1)) for msh in submeshes]
         p_bcs = [project(self.p_bc, FunctionSpace(msh, 'CG', 1)) for msh in submeshes]

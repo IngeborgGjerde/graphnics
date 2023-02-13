@@ -300,6 +300,8 @@ class GlobalFlux(UserExpression):
             qs (list): list of fluxes on each edge in the branch
         """
 
+        if not isinstance(qs, list):
+            qs = [qs]
         self.G = G
         self.qs = qs
         super().__init__(**kwargs)
@@ -307,10 +309,16 @@ class GlobalFlux(UserExpression):
     def eval_cell(self, values, x, cell):
         edge = self.G.mf[cell.index]
         tangent = self.G.tangents[edge][1]
-        values[0] = self.qs[edge](x) * tangent[0]
-        values[1] = self.qs[edge](x) * tangent[1]
+    
+        # Depending on model we use, qs is either a list of functions or a single function    
+        if len(self.qs)>1:
+            qval = self.qs[edge](x)
+        else:
+            qval = self.qs[0](x)
+        values[0] = qval * tangent[0]
+        values[1] = qval * tangent[1]
         if self.G.geom_dim == 3:
-            values[2] = self.qs[edge](x) * tangent[2]
+            values[2] = qval * tangent[2]
 
     def value_shape(self):
         return (self.G.geom_dim,)

@@ -1,9 +1,5 @@
 import networkx as nx
 from fenics import *
-import sys
-
-sys.path.append("../")
-
 from graphnics import *
 
 

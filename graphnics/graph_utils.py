@@ -249,3 +249,7 @@ class DistFromSource(UserExpression):
     def eval(self, values, x):
         # Query the CG-1 dist_func
         values[0] = self.dist_func(x)
+
+    def value_shape(self):
+        return ()
+        

@@ -136,8 +136,9 @@ class TubeFile(File):
         content = pvdfile.read().splitlines()
         
         # add entry before footer
-        pvd_entry = f"<DataSet timestep=\"{i}\" part=\"0\" file=\"{self.fname}{int(i):06d}.vtp\" />"
-        print(pvd_entry)
+        short_fname = self.fname.split('/')[-1]
+        
+        pvd_entry = f"<DataSet timestep=\"{i}\" part=\"0\" file=\"{short_fname}{int(i):06d}.vtp\" />"
         updated_content = content[:-2] + [pvd_entry] + content[-2:] 
         updated_content = "\n".join(updated_content)# convert to string
         

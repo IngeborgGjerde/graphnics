@@ -115,9 +115,8 @@ class TimeDepMixedHydraulicNetwork(MixedHydraulicNetwork):
         return Mv
 
 
-
 def time_stepping_stokes(
-    model, t=Constant(0), t_steps=10, T=1, qp0=None, t_step_scheme="IE", reassemble=True
+    model, t=Constant(0), t_steps=10, T=1, qp0=None, t_step_scheme="IE", reassemble_lhs=True
 ):
     """
     Do time stepping for models of the type
@@ -136,7 +135,7 @@ def time_stepping_stokes(
     The model parameters can be expressions depending on class attribute t
     or ufl functions depending on the Constant t.
     """
-
+    
     if qp0 is None:
         qp0 = ii_Function(model.W)  # initialize as zero
 
@@ -164,10 +163,14 @@ def time_stepping_stokes(
 
     t.assign(dt)
     
-    #for t_val in tqdm(np.linspace(dt, T, t_steps - 1)):
-    for t_val in np.linspace(dt, T, t_steps - 1):   
+    An1, Ln1, DDn1 = [ii_assemble(term) for term in [a, L, Dn1]]
+    
+    for t_val in tqdm(np.linspace(dt, T, t_steps - 1)):
+    #for t_val in np.linspace(dt, T, t_steps - 1):   
         
-        An1, Ln1, DDn1 = [ii_assemble(term) for term in [a, L, Dn1]]
+        Ln1 = ii_assemble(L)
+        if reassemble_lhs:
+            An1, DDn1 = [ii_assemble(term) for term in [a, Dn1]]
             
         # Assemble and solve the system at the current time step
         A = (DDn1 + cn1*dt*An1)
@@ -186,10 +189,10 @@ def time_stepping_stokes(
                 
         qps.append(sol)
         # Prepare for next time step        
-        # - update qp_n
+        # 1) update qp_n
         [qp0[i].assign(func) for i, func in enumerate(qpn1)]
 
-        # 1) update time
+        # 2) update time
         t.assign(t_val+dt) #in case one of the model parameters are ufl type
         
         # in case one of the model parameters are expressions       
@@ -200,8 +203,8 @@ def time_stepping_stokes(
                 pass # if this is a ufl function it won't have a t attribute        
         
         # 2) update matrices
-        An = An1.copy()
-        Ln = Ln1.copy() #TODO: this does not work if parameters are expressions!
+        An = An1
+        Ln = Ln1
         DDn = DDn1*qp0.block_vec()
         
         a = model.a_form()

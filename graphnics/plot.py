@@ -64,7 +64,6 @@ class TubeFile(File):
         Args:
             - func: tuple with function and time step
             If only function is given, time step is set to 0 
-            - radius (function): network radius
         """
         
         if type(func) is tuple:
@@ -72,9 +71,16 @@ class TubeFile(File):
         else:
             i = 0    
 
-        radius = TubeRadius(self.G, degree=2)
-        radius = interpolate(radius, FunctionSpace(self.G.global_mesh, 'CG', 1))
+        #radius = TubeRadius(self.G, degree=2)
+        #radius = interpolate(radius, FunctionSpace(self.G.global_mesh, 'CG', 1))
         
+        radius_dict = nx.get_edge_attributes(self.G, 'radius')
+        mesh0, foo = self.G.get_mesh(0)
+        DG = FunctionSpace(mesh0, 'DG', 0)
+        radius = Function(DG)
+        radius.vector()[:] = list(radius_dict.values())
+        radius.set_allow_extrapolation(True)
+                
         ### Write vtp file for this time step
         
         # Store points in vtkPoints

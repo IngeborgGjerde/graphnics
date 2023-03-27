@@ -32,7 +32,7 @@ Then it depends on the diameters
 
 
 def make_arterial_tree(
-    N, radius0=1, gam=0.8, lmbda=8, directions=False, uniform_lengths=False
+    N, radius0=1, gam=0.8, L0=10, directions=False, uniform_lengths=False
 ):
     """
     N (int): number of levels in the arterial tree
@@ -72,7 +72,8 @@ def make_arterial_tree(
 
     # Create the first vessel
     #########################
-    L = D0 * lmbda
+    L = L0
+    lmbda = L/(D0)
 
     G.add_edge(0, 1)
 
@@ -100,6 +101,8 @@ def make_arterial_tree(
             # Daughter lengths
             L2 = lmbda * D2
             L1 = lmbda * 0.6 * D1
+
+    
 
             if uniform_lengths:
                 L1, L2 = L, L
@@ -158,7 +161,7 @@ def make_arterial_tree(
 
                 #if no edges overlap with this new one
                 # we go ahead and add it
-                if True: #intersecting_lines < 1:
+                if intersecting_lines < 1:
                     new_node_ix += 1
 
                     new_edge = (e[1], new_node_ix)

@@ -1,13 +1,12 @@
 from fenics import *
 from xii import *
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 from .flow_models import *
 from graphnics import *
 set_log_level(40)
 
 time_stepping_schemes = {"IE": {"b1": 0, "b2": 1}, "CN": {"b1": 0.5, "b2": 0.5}}
 
-# TODO: Something is wrong with matrix copy for expressions
 
 class TimeDepHydraulicNetwork(HydraulicNetwork):
     

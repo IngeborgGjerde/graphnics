@@ -56,7 +56,8 @@ class FenicsGraph(nx.DiGraph):
         mesh = Mesh()
         editor = MeshEditor()
         
-        geom_dim = len(self.nodes[1]["pos"])
+        some_node_ix = list(self.nodes())[0]
+        geom_dim = len(self.nodes()[some_node_ix]["pos"])
         
         editor.open(mesh, "interval", 1, geom_dim)
         editor.init_vertices(len(vertex_coords))
@@ -92,7 +93,8 @@ class FenicsGraph(nx.DiGraph):
         """
 
         # Store the coordinate dimensions
-        geom_dim = len(self.nodes[1]["pos"])
+        some_node_ix = list(self.nodes())[0]
+        geom_dim = len(self.nodes()[some_node_ix]["pos"])
         self.geom_dim = geom_dim
         self.num_edges = len(self.edges)
         

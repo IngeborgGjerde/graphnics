@@ -6,8 +6,8 @@ tags:
   - medicine
 authors:
   - name: Ingeborg Gjerde
-    orcid: 0000-0000-0000-0000
-    equal-contrib: true
+    orcid: 0000-0002-6089-1998
+    equal-contrib: false
     affiliation: "1" # (Multiple affiliations must be quoted)
 affiliations:
  - name: Simula Research Laboratory
@@ -130,6 +130,8 @@ problems that are posed in terms of edge and vertex variables, the graph iterato
 We thank Miroslav Kuchta, Cecile Daversin-Catty and Jørgen Dokken for
 their input on the implementation, and Pablo Blinder and David Kleinfeld
 for sharing data for the pial vasculature of rodents.
+
+This research is supported by the European Research Council (ERC) under the European Union’s Horizon 2020 research and innovation programme under grant agreement 714892 (Waterscales)
 
 # References
 

@@ -38,3 +38,8 @@ RUN git clone https://bitbucket.org/fenics-apps/cbc.block && \
 # fix decorator error by reinstalling scipy
 RUN pip uninstall -y scipy && pip install scipy
 
+# and finally install graphnics
+RUN git clone https://github.com/IngeborgGjerde/graphnics && \
+    cd graphnics && \
+    python3 -m pip install -e . && \
+    cd ..

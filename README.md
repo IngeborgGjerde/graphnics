@@ -20,10 +20,27 @@ The `graphnics` library solves network models using the finite element method. T
 The library `fenics_ii` has been used for the implementation as it provides rapid and robust assembly of mixed-dimensional problems. The runtimes for the most computationally expensive model is shown here: 
 - [Profiling](https://github.com/IngeborgGjerde/graphnics/blob/main/demo/Tree%20profiling.ipynb)
 
-## Installation
-We use `networkx` combined with the mixed-dimensional library [`fenics_ii`](https://github.com/MiroK/fenics_ii) created by Miroslav Kuchta. 
+## Dependencies and installation
 
-The environment is provided as a docker container. The container can be built and run locally by executing
+The core functionality of `graphnics` is provided by the following libraries:
+- [FEniCS](https://fenicsproject.org/) version 2019.1.0 or later
+- [networkx](https://networkx.org/)  version 2.5 or later
+
+Some of the network flow models require mixed-dimensional assembly, which is provided by the following libraries:
+- [`fenics_ii`](https://github.com/MiroK/fenics_ii)
+- ['cbc.block'](https://bitbucket.org/fenics-project/cbc.block/src/master/)
+
+### Installation
+Provided that these dependencies are installed, `graphnics` can be pip-installed via
+```shell
+git clone https://github.com/IngeborgGjerde/graphnics/ && cd graphnics
+python3 -m pip install .
+```
+
+Should you have trouble installing these dependencies, we recommend you use the below docker image.
+
+## Docker image
+The full environment for `graphnics`, along with demos, is provided as a docker container. The container can be built and run locally by executing
 
 ```shell
 git clone https://github.com/IngeborgGjerde/graphnics/
@@ -34,25 +51,26 @@ cd ..
 # make container
 docker run --name graphnics-container -v "$(pwd):/home/fenics/shared" -d -p 127.0.0.1:8888:8888 graphnics 'jupyter-notebook --ip=0.0.0.0'
 ```
+The directory you run the above command from will then be shared with the docker container.
 
-You can then enter the container by running 
-```shell
-docker exec -it graphnics-container /bin/bash
-```
-
-To connect it to a jupyter notebook, run
+In order to run the jupyter notebook demos, execute 
 ```shell
 docker logs graphnics-container
 ```
-and enter the html-links it provides in your browser.
+in the terminal. This will print a link to the jupyter notebook. Copy the link and paste it into your browser.
+
+
+To run scripts natively in the container, you can enter the container by running
+```shell
+docker exec -it graphnics-container /bin/bash
+```
+and access the shared directory by running
+```shell
+cd shared
+```
+
 
 ## Citation
-
-This code is currently being prepared for submission to JOSS, titled:
-
-*Graphnics: Combining networkx and FEniCS to solve network models* by Ingeborg Gjerde
-
-The paper draft can be found [here.](https://github.com/IngeborgGjerde/graphnics/blob/main/paper/joss.md)
 
 You can cite the repo using arxiv preprint
 ```

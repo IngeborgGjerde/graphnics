@@ -11,7 +11,7 @@ import networkx as nx
 from .fenics_graph import *
 
 
-def make_line_graph(n, dim=2, dx=1):
+def line_graph(n, dim=2, dx=1):
     """
     Make a graph along the unit x-axis with n nodes
 
@@ -36,8 +36,16 @@ def make_line_graph(n, dim=2, dx=1):
 
 def honeycomb(n, m):
     """
-    Make honeycomb mesh with inlet
-
+    Make honeycomb mesh with inlet and outlet
+           
+              /  (inlet)
+           x x 
+          /\/\
+          x x x    (honeycomb)
+          \/\/
+           x x
+(outlet) /
+    
     Args:
         m (int): honeycomb rows
         n (int): honeycomb cols
@@ -77,13 +85,15 @@ def honeycomb(n, m):
     return G
 
 
-def make_Y_bifurcation(dim=2):
+def Y_bifurcation(dim=2):
     """
+    Generate a Y-bifurcation.
+    
     Args:
         dim (int, optional): spatial dimension of node coords. Defaults to 2.
 
     Returns:
-        FenicsGraph: network tree with one generation
+        FenicsGraph: tree network
     """
     G = FenicsGraph()
 
@@ -101,13 +111,17 @@ def make_Y_bifurcation(dim=2):
     return G
 
 
-def make_double_Y_bifurcation(dim=2):
+def YY_bifurcation(dim=2):
     """
+    Generate a Y-bifurcation with two generations:
+      Y Y
+       Y
+    
     Args:
         dim (int, optional): spatial dimension of node coords. Defaults to 2.
 
     Returns:
-        FenicsGraph: network tree with two generations
+        FenicsGraph: tree network
     """
     
     G = FenicsGraph()

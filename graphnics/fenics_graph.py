@@ -13,29 +13,42 @@ You can freely redistribute it and/or modify it under the terms of the GNU Gener
 
 
 """
-The Graphnics class constructs fenics meshes from networkx directed graphs.
+The FenicsGraph class constructs fenics meshes along with useful functions from networkx directed graphs.
+
 """
 
 
 # Marker tags for inward/outward pointing bifurcation nodes and boundary nodes
-BIF_IN = 1
+BIF_IN = 1 
 BIF_OUT = 2
 BOUN_IN = 3
 BOUN_OUT = 4
 
 
 class FenicsGraph(nx.DiGraph):
-    """
-    Make fenics mesh from networkx directed graph
+    """Class for constructing fenics meshes and associated functions from networkx directed graphs.
+    
+    Meshes and functions are computed using the "pos" attribute of each node, which should be a list of spatial coordinates.
+    
+    Example:
+        >> G = FenicsGraph(nx.cycle_graph(4)) # Make a cycle graph 
+        >> [G.nodes[i]["pos"] = [i, 0] for i in range(0, 4)] # Set the positions of the nodes
+        >> G.make_mesh(2) # Make a fenics mesh with 2^2=4 cells on each edge
+        >> G.make_submeshes() # Make submeshes for each edge
 
     Attributes:
-        global_mesh (df.mesh): mesh for the entire graph
-        edges[i].mesh (df.mesh): submesh for edge i
-        global_tangent (df.function): tangent vector for the global mesh, points along edge
-        dds (function): derivative d/ds along edge
+        mesh (df.mesh): mesh for the entire graph
+        geom_dim (int): spatial dimension of coordinates
+        num_edges (int): number of edges in graph
         mf (df.function): 1d meshfunction that maps cell->edge number
         vf (df.function): 0d meshfunction on  edges[i].mesh that stores bifurcation and boundary point data
-        num_edges (int): number of edges in graph
+        bifurcation_ixs (list): node indices of bifurcation points
+        num_bifurcations (int): number of bifurcation points
+        boundary_ixs (list): node indices of boundary points
+        tangent (df.function): tangent vector for the global mesh, points along edge
+        edges[i].submesh (df.mesh): submesh for edge i
+        edges[i].tangent (list): tangent vector for edge i, points along edge
+        
     """
 
     def __init__(self):
@@ -48,7 +61,6 @@ class FenicsGraph(nx.DiGraph):
 
         Args:
             n (int): number of refinements
-            make_edgemeshes (bool): make submesh for each edge 
             
         Returns:
             mesh (df.mesh): the global mesh
@@ -93,7 +105,6 @@ class FenicsGraph(nx.DiGraph):
 
         Args:
             n (int): number of refinements
-            make_edgemeshes (bool): make submesh for each edge 
             
         Returns:
             mesh (df.mesh): the global mesh
@@ -108,7 +119,7 @@ class FenicsGraph(nx.DiGraph):
                 
         # Store refined global mesh and refined mesh function marking branches
         mesh, mf = self.get_mesh(n)
-        self.global_mesh = mesh
+        self.mesh = mesh
         self.mf = mf
         
         # Store lists with bifurcation and boundary nodes
@@ -222,7 +233,7 @@ class FenicsGraph(nx.DiGraph):
         The tangent vector lists are stored
             * for each edge in G.edges[i]['tangent']
             * as a lookup dictionary in G.tangents
-            * as a fenics function in self.global_tangent
+            * as a fenics function in self.tangent
         """
 
         for u, v in self.edges():
@@ -237,15 +248,15 @@ class FenicsGraph(nx.DiGraph):
 
         tangent = TangentFunction(self, degree=1)
         tangent_i = interpolate(
-            tangent, VectorFunctionSpace(self.global_mesh, "DG", 0, self.geom_dim)
+            tangent, VectorFunctionSpace(self.mesh, "DG", 0, self.geom_dim)
         )
-        self.global_tangent = tangent_i
+        self.tangent = tangent_i
 
     def dds(self, f):
         """
         function for derivative df/ds along graph
         """
-        return dot(grad(f), self.global_tangent)
+        return dot(grad(f), self.tangent)
 
     def dds_i(self, f, i):
         """
@@ -302,7 +313,8 @@ class FenicsGraph(nx.DiGraph):
 
 class GlobalFlux(UserExpression):
     """
-    Evaluates P2 flux on each edge
+    Construct vector valued expression for flux on the graph, 
+    by multiplying the flux function (scalar) with the tangent vector
     """
 
     def __init__(self, G, qs, **kwargs):
@@ -310,6 +322,9 @@ class GlobalFlux(UserExpression):
         Args:
             G (nx.graph): Network graph
             qs (list): list of fluxes on each edge in the branch
+                or 
+            qs (func): flux function
+
         """
 
         if not isinstance(qs, list):
@@ -338,7 +353,7 @@ class GlobalFlux(UserExpression):
 
 class GlobalCrossectionFlux(UserExpression):
     """
-    Evaluates P2 flux on each edge
+    Construct global (scalar) expression for flux on the graph from list of flux functions on each edge
     """
 
     def __init__(self, G, qs, **kwargs):
@@ -362,8 +377,7 @@ class GlobalCrossectionFlux(UserExpression):
 
 class TangentFunction(UserExpression):
     """
-    Tangent expression for graph G, which is
-    constructed from G.tangents
+    Tangent expression for graph G, which is constructed from G.tangents
     """
 
     def __init__(self, G, degree, **kwargs):

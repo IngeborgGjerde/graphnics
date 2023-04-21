@@ -19,12 +19,12 @@ from graphnics import *
 
 def test_vtp_plot():
     
-    G = make_double_Y_bifurcation(dim=3)
+    G = YY_bifurcation(dim=3)
     for e in G.edges():
             G.edges()[e]['radius'] = 1
             
     ffile = TubeFile(G, 'test.pvd')
-    V = FunctionSpace(G.global_mesh, 'CG', 1)
+    V = FunctionSpace(G.mesh, 'CG', 1)
     v = Function(V)
 
     # Test that we can write a function to plot file    

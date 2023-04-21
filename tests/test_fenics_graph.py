@@ -14,9 +14,9 @@ from graphnics import *
 def test_fenics_graph():
     # Make simple y-bifurcation
 
-    G = make_Y_bifurcation()
+    G = Y_bifurcation()
     G.make_mesh()
-    mesh = G.global_mesh
+    mesh = G.mesh
 
     # Check that all the mesh coordinates are also
     # vertex coordinates in the graph
@@ -27,7 +27,7 @@ def test_fenics_graph():
         assert len(vertex_ix) == 1, "vertex coordinate is not a mesh coordinate"
 
 def test_compute_vertex_degrees():
-    G = make_Y_bifurcation()
+    G = Y_bifurcation()
     G.compute_vertex_degrees()
 
     degrees = nx.get_node_attributes(G, 'degree')
@@ -37,7 +37,7 @@ def test_compute_vertex_degrees():
 
 def test_tangent_vector():
     # Make simple y-bifurcation
-    G = make_Y_bifurcation()
+    G = Y_bifurcation()
     G.make_mesh(n=3)
     G.make_submeshes()
     

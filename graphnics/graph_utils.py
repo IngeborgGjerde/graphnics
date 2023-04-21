@@ -205,13 +205,21 @@ def assign_radius_using_Murrays_law(G, start_node, start_radius):
 class DistFromSource(UserExpression):
     """
     Evaluates the distance of a point on a graph to the source node
+    Computation assumes that the graph is non-cyclic
     """
 
     def __init__(self, G, source_node, **kwargs):
         """
         Args:
             G (nx.graph): Network graph
-            source_node (int):
+            source_node (int): Index of source node, i.e. the node from which the distance is measured
+            
+        Distances by traversing the graph in a breadth-first-search manner and adding up the edge lengths
+        
+        Results are stored as the dof values of a CG 1 function and can be used in variational formulations or queried directly
+        >> dist = DistFromSource(G, source_node)
+        >> print(dist(0.5, 0.5))
+        
         """
 
         self.G = G

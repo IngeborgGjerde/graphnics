@@ -34,7 +34,7 @@ class TimeDepHydraulicNetwork(HydraulicNetwork):
             coeff (df.function): coefficient in front of the mass matrix
         '''
 
-        dx = Measure("dx", domain=self.G.global_mesh)
+        dx = Measure("dx", domain=self.G.mesh)
         
         # Init all blocks to zero
         M = [[0 for i in range(0, len(self.qp))] for j in range(0, len(self.qp))]
@@ -53,7 +53,7 @@ class TimeDepHydraulicNetwork(HydraulicNetwork):
         
         '''
         
-        dx = Measure("dx", domain=self.G.global_mesh)
+        dx = Measure("dx", domain=self.G.mesh)
         
         Mv = [0 for i in range(0, len(self.qp))] # Init all rows to zero
         Mv[0] = coeff*u[0]*self.vphi[0]*dx # Assemble mass vector for q
@@ -82,7 +82,7 @@ class TimeDepMixedHydraulicNetwork(MixedHydraulicNetwork):
             coeff (df.function): coefficient in front of the mass matrix
         '''
 
-        dx = Measure("dx", domain=self.G.global_mesh)
+        dx = Measure("dx", domain=self.G.mesh)
         
         # Init all blocks to zero
         M = [[0 for i in range(0, len(self.qp))] for j in range(0, len(self.qp))]
@@ -93,7 +93,7 @@ class TimeDepMixedHydraulicNetwork(MixedHydraulicNetwork):
             M[i][i] += coeff*self.qp[i]*self.vphi[i]*dx_edge
                 
         # Init rest as zero blocks so fenics_ii has something to work with
-        dx = Measure("dx", domain=self.G.global_mesh)
+        dx = Measure("dx", domain=self.G.mesh)
         
         for i in range(self.G.num_edges, len(self.qp)):
             M[i][i] = Constant(0)*self.qp[i]*self.vphi[i]*dx
@@ -107,7 +107,7 @@ class TimeDepMixedHydraulicNetwork(MixedHydraulicNetwork):
         
         '''
         
-        dx = Measure("dx", domain=self.G.global_mesh)
+        dx = Measure("dx", domain=self.G.mesh)
         
         Mv = [0 for i in range(0, len(self.qp))] # Init all rows to zero
         

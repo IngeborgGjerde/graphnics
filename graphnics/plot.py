@@ -43,7 +43,7 @@ class TubeFile(File):
         >> G = make_Y_bifurcation(dim=3)
         >> for e in G.edges():
         >>     G.edges()[e]['radius'] = 1
-        >> V = FunctionSpace(G.global_mesh, 'CG', 1)
+        >> V = FunctionSpace(G.mesh, 'CG', 1)
         >> f_i = interpolate(Expression('x[0]', degree=2))
         >> f_i.rename('f', '0.0')
         >> TubeFile(G, 'test.pvd') << f_i  
@@ -80,7 +80,7 @@ class TubeFile(File):
             i = 0    
 
         #radius = TubeRadius(self.G, degree=2)
-        #radius = interpolate(radius, FunctionSpace(self.G.global_mesh, 'CG', 1))
+        #radius = interpolate(radius, FunctionSpace(self.G.mesh, 'CG', 1))
         
         radius_dict = nx.get_edge_attributes(self.G, 'radius')
         mesh0, foo = self.G.get_mesh(0)
@@ -92,14 +92,14 @@ class TubeFile(File):
         ### Write vtp file for this time step
         
         # Store points in vtkPoints
-        coords = self.G.global_mesh.coordinates()
+        coords = self.G.mesh.coordinates()
         points = vtkPoints()
         for c in coords:
             points.InsertNextPoint(list(c))
 
         # Store edges in cell array
         lines = vtkCellArray()
-        edge_to_vertices = self.G.global_mesh.cells()
+        edge_to_vertices = self.G.mesh.cells()
 
         for vs in edge_to_vertices: 
             line = vtkLine()

@@ -21,9 +21,9 @@ def test_mass_conservation():
     """
 
     tests = {
-        "Graph line": make_line_graph(3, dim=3),
-        "Y bifurcation": make_Y_bifurcation(),
-        "YY bifurcation": make_double_Y_bifurcation(),
+        "Graph line": line_graph(3, dim=3),
+        "Y bifurcation": Y_bifurcation(),
+        "YY bifurcation": YY_bifurcation(),
         "honeycomb": honeycomb(4, 4),
     }
 
@@ -77,7 +77,7 @@ def test_hydraulic_network():
     Test mixed hydraulic network model against simple manufactured solution on Y bifurcation
     """
 
-    G = make_Y_bifurcation()
+    G = Y_bifurcation()
     G.make_mesh(6)
     
     model = HydraulicNetwork(G, p_bc = Expression('-x[1]', degree=2))
@@ -108,7 +108,7 @@ def hydraulic_manufactured_solution(G, Ainv, Res):
         t: time variable
     '''
 
-    xx = SpatialCoordinate(G.global_mesh)
+    xx = SpatialCoordinate(G.mesh)
     
     # some nice manufactured solution
     q = sin(2*3.14*xx[0])
@@ -132,13 +132,13 @@ def test_mixed_hydraulic():
     Res = 1
 
     # Solve on graph with single edge
-    G = make_line_graph(2, dx=2)
+    G = line_graph(2, dx=2)
     G.make_mesh(8)
     G.make_submeshes()
     
     f, q, p, g = hydraulic_manufactured_solution(G, Ainv, Res)
 
-    p = project(p, FunctionSpace(G.global_mesh, "CG", 2))
+    p = project(p, FunctionSpace(G.mesh, "CG", 2))
     
     prop_dict = {
         key: {"Res": Constant(Res), "Ainv": Constant(Ainv)}
@@ -152,10 +152,10 @@ def test_mixed_hydraulic():
     qh, ph = sol
 
     # Compute errors
-    pa = project(p, FunctionSpace(G.global_mesh, "CG", 2))
+    pa = project(p, FunctionSpace(G.mesh, "CG", 2))
     p_error = errornorm(ph, pa)
 
-    qa = project(q, FunctionSpace(G.global_mesh, "CG", 3))
+    qa = project(q, FunctionSpace(G.mesh, "CG", 3))
     q_error = errornorm(qh, qa)
     
     assert q_error < 1e-2, f"Mixed hydraulic model not giving correct flux, q_error = {q_error}"
@@ -174,12 +174,12 @@ def test_hydraulic():
     Res = 1
 
     # Solve on graph with single edge
-    G = make_line_graph(2, dx=2)
+    G = line_graph(2, dx=2)
     G.make_mesh(10)
     
     f, q, p, g = hydraulic_manufactured_solution(G, Ainv, Res)
 
-    p = project(p, FunctionSpace(G.global_mesh, "CG", 2))
+    p = project(p, FunctionSpace(G.mesh, "CG", 2))
     
     model = HydraulicNetwork(G, f=f, g=g, p_bc=p)
     sol = model.solve()
@@ -187,10 +187,10 @@ def test_hydraulic():
     qh, ph = sol
 
     # Compute and print errors
-    pa = project(p, FunctionSpace(G.global_mesh, "CG", 2))
+    pa = project(p, FunctionSpace(G.mesh, "CG", 2))
     p_error = errornorm(ph, pa)
 
-    qa = project(q, FunctionSpace(G.global_mesh, "CG", 3))
+    qa = project(q, FunctionSpace(G.mesh, "CG", 3))
     q_error = errornorm(qh, qa)
     
     assert q_error < 1e-2, f"Hydraulic model not giving correct flux, q_error = {q_error}"

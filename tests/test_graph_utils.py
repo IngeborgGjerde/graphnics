@@ -18,13 +18,13 @@ from graphnics import *
 def test_graph_color():
 
     # Check that a line graph gets all the same color
-    G = make_line_graph(3)
+    G = line_graph(3)
     
     color_graph(G)
     assert G.edges()[(0, 1)]["color"] == G.edges()[(1, 2)]["color"]
 
     # check that a Y bifurcation gets three different colors
-    G = make_Y_bifurcation()
+    G = Y_bifurcation()
     color_graph(G)
     colors = nx.get_edge_attributes(G, "color")
     assert len(set(colors.values())) == 3
@@ -45,11 +45,11 @@ def test_graph_color():
 def test_dist_from_source():
 
     # Test on simple line graph
-    G = make_line_graph(10)
+    G = line_graph(10)
 
     dist_from_source = DistFromSource(G, 0, degree=2)
 
-    V = FunctionSpace(G.global_mesh, "CG", 1)
+    V = FunctionSpace(G.mesh, "CG", 1)
     dist_from_source_i = interpolate(dist_from_source, V)
 
     coords = V.tabulate_dof_coordinates()
@@ -63,7 +63,7 @@ def test_dist_from_source():
     assert near(discrepancy, 0), f"distance function discrepancy: {discrepancy}"
 
     # Check on a double Y bifurcation
-    G = make_double_Y_bifurcation()
+    G = YY_bifurcation()
 
     dist_from_source = DistFromSource(G, 0, degree=2)
 
@@ -84,7 +84,7 @@ def test_dist_from_source():
 
 def test_Murrays_law_on_double_bifurcation():
 
-    G = make_double_Y_bifurcation()
+    G = YY_bifurcation()
 
     G = assign_radius_using_Murrays_law(G, start_node=0, start_radius=1)
 

@@ -33,7 +33,7 @@ def hydraulic_manufactured_solution(G, Ainv, Res):
     # some nice solution
     t = Constant(0)
     
-    xx = SpatialCoordinate(G.global_mesh)
+    xx = SpatialCoordinate(G.mesh)
     
     q = t*sin(2*3.14*xx[0])# + cos(2*3.14*t)
     p = t*cos(2*3.14*xx[0])# + sin(2*3.14*t)
@@ -62,7 +62,7 @@ def sympy_hydraulic_manufactured_solution(G, Ainv, Res):
 
 def test_time_stepping_hydraulic():
     
-    G = make_line_graph(2)
+    G = line_graph(2)
     G.make_mesh(10)
     
     Ainv = 3
@@ -85,8 +85,8 @@ def test_time_stepping_hydraulic():
 
         t.assign(T) # set time to T
         
-        qa = project(q, FunctionSpace(G.global_mesh, "CG", 3))
-        pa = project(p, FunctionSpace(G.global_mesh, "CG", 2))
+        qa = project(q, FunctionSpace(G.mesh, "CG", 3))
+        pa = project(p, FunctionSpace(G.mesh, "CG", 2))
     
         error_q = errornorm(qh, qa)
         error_p = errornorm(ph, pa)
@@ -97,7 +97,7 @@ def test_time_stepping_hydraulic():
     
 def test_time_stepping_mixed_hydraulic():
     
-    G = make_line_graph(2)
+    G = line_graph(2)
     G.make_mesh(5)
     G.make_submeshes()
     
@@ -126,8 +126,8 @@ def test_time_stepping_mixed_hydraulic():
     q.t = T
     p.t = T
     
-    qa = project(q, FunctionSpace(G.global_mesh, "CG", 3))
-    pa = project(p, FunctionSpace(G.global_mesh, "CG", 2))
+    qa = project(q, FunctionSpace(G.mesh, "CG", 3))
+    pa = project(p, FunctionSpace(G.mesh, "CG", 2))
     
     error_q = errornorm(qh, qa)
     error_p = errornorm(ph, pa)

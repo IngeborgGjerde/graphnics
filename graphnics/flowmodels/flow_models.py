@@ -29,7 +29,7 @@ class NetworkPoisson:
         self.p_bc = p_bc
         self.kappa = kappa
 
-        self.V = FunctionSpace(G.global_mesh, "CG", degree)
+        self.V = FunctionSpace(G.mesh, "CG", degree)
 
     def a_form(self):
         u = TrialFunction(self.V)
@@ -69,8 +69,8 @@ class HydraulicNetwork:
         self.p_bc = p_bc
         self.Res = Res
 
-        self.W = [FunctionSpace(G.global_mesh, "DG", degree-1),
-                  FunctionSpace(G.global_mesh, "CG", degree)]
+        self.W = [FunctionSpace(G.mesh, "DG", degree-1),
+                  FunctionSpace(G.mesh, "CG", degree)]
 
 
         self.qp = list(map(TrialFunction, self.W))
@@ -93,7 +93,7 @@ class HydraulicNetwork:
 
     def L_form(self):
         v, phi = self.vphi
-        dx = Measure("dx", domain=self.G.global_mesh)
+        dx = Measure("dx", domain=self.G.mesh)
         L = [0, 0]
         L[0] = self.g*v*dx
         L[1] = self.f*phi*dx
@@ -178,16 +178,16 @@ class MixedHydraulicNetwork:
         ]
         P1s = [
             FunctionSpace(
-                G.global_mesh, space["pressure_space"], space["pressure_degree"]
+                G.mesh, space["pressure_space"], space["pressure_degree"]
             )
         ]
-        LMs = [FunctionSpace(G.global_mesh, "R", 0) for b in G.bifurcation_ixs]
+        LMs = [FunctionSpace(G.mesh, "R", 0) for b in G.bifurcation_ixs]
 
         ### Function spaces
         W = P2s + P1s + LMs
         self.W = W
 
-        self.meshes = submeshes + [G.global_mesh] * (
+        self.meshes = submeshes + [G.mesh] * (
             G.num_bifurcations + 1
         )  # associated meshes
 

@@ -26,7 +26,7 @@ offers
 -   A `FenicsGraph` class built on top of the `DiGraph` class in `networkx`, that constructs a global mesh for a network and provides `FEniCS` mesh functions describing how they relate to the graph structure.
 -   Example models showing how the `FenicsGraph` class can be used to
     assemble and solve different network flow models.
-The example models are implemented using `fenics_ii` (Kuchta 2019) as this allows for assembling also coupled 1D-3D flow models. The code used for the assembly of the system can be  directly translated to use different flavours of `FEniCS`, using e.g. the mixed-dimensional branch of `FEniCS` (Daversin-Catty et.al. 2021)
+The example models are implemented using `fenics_ii` (Kuchta 2019) as this allows for assembling also coupled 1D-3D flow models. The code used for the assembly of the system can be  directly translated to use different flavours of `FEniCS`, using e.g. the mixed-dimensional branch of `FEniCS` (Daversin-Catty et.al. 2021) or `multiphenics`.
 
 
 
@@ -115,7 +115,7 @@ spatial derivative $\partial_s f_i = \nabla f_i \cdot \boldsymbol{\tau}_i$ on th
 
 `graphnics` can further be used to create and solve network flow models.
 If the problem is posed in terms of global variables this can be done using standard methods in `FEniCS`; this is demoed in the `NetworkPoisson` model. For
-problems that are posed in terms of edge and vertex variables, the graph iterators in `networkx` can be used to add their contributions to the block matrix. This is demoed in the `HydraulicNetwork` and `NetworkStokes` model classes.
+problems that are posed in terms of edge and vertex variables, the graph iterators in `networkx` can be used to add their contributions to the block matrix. This is demoed in the `MixedHydraulicNetwork` and `NetworkStokes` model classes.
 
 <p float="left">
 <img src="pial_pressure.png" alt="drawing" width="420"/>

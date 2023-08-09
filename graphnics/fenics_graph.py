@@ -432,3 +432,29 @@ def copy_from_nx_graph(G_nx):
         
 
     return G
+
+
+def nxgraph_attribute_to_dolfin(G, attr):
+    '''
+    Make a dolfin function representing edge attributes of a networkx graph
+    
+    Args:
+        G (nx.Graph): graph representing the network
+        attr (str): attribute to be represented
+    
+    Returns:
+        func (dolfin.Function): a DG function representing the attribute
+    '''
+    
+    mesh0, foo = G.get_mesh(0)
+    DG_coarse = FunctionSpace(mesh0, 'DG', 0) # trick: Interpolate the radius from the coarse mesh to the fine mesh
+    
+    attr_dict = nx.get_edge_attributes(G, attr)
+    func = Function(DG_coarse)
+    func.vector()[:] = np.asarray(list(attr_dict.values()))
+    func.set_allow_extrapolation(True)
+    
+    DG = FunctionSpace(G.mesh, 'DG', 1)
+    func = interpolate(func, DG)
+    
+    return func

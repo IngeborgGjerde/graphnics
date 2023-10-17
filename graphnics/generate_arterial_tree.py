@@ -32,7 +32,7 @@ Then it depends on the diameters
 
 
 def make_arterial_tree(
-    N, radius0=1, gam=0.8, L0=10, directions=False, uniform_lengths=False
+        N, radius0=1, gam=0.8, L0=10, directions=False, uniform_lengths=False, seed=None
 ):
     """
     N (int): number of levels in the arterial tree
@@ -45,6 +45,8 @@ def make_arterial_tree(
     Assigning directions is useful for reproducability of results.
     """
 
+    if seed is not None: random.seed(seed)
+    
     # Parameters
     # Origin location
     p0 = [0, 0, 0]

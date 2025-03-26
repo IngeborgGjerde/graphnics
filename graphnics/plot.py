@@ -40,15 +40,15 @@ class TubeFile(File):
             fname (str): location and name for file
             
         Example:
-        >> G = make_Y_bifurcation(dim=3)
+        >> G = Y_bifurcation(dim=3)
         >> for e in G.edges():
-        >>     G.edges()[e]['radius'] = 1
-        >> V = FunctionSpace(G.mesh, 'CG', 1)
-        >> f_i = interpolate(Expression('x[0]', degree=2))
-        >> f_i.rename('f', '0.0')
-        >> TubeFile(G, 'test.pvd') << f_i  
+        >>      G.edges()[e]['radius'] = 1
+        >>  V = FunctionSpace(G.mesh, 'CG', 1)
+        >>  f_i = interpolate(Expression('x[0]', degree=2), V)
+        >>  f_i.rename('f', '0.0')
+        >>  TubeFile(G, 'test.pvd') << f_i  
         """
-        
+        super().__init__(fname)
         f_name, f_ext = os.path.splitext(fname)
         assert f_ext == '.pvd', 'TubeFile must have .pvd file ending'
         
